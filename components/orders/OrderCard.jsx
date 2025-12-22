@@ -1,4 +1,4 @@
-// components/orders/OrderCard.jsx - Add dispatch lock
+// components/orders/OrderCard.jsx - Remove % display
 'use client';
 import { useState } from 'react';
 import OrderDetails from './OrderDetails';
@@ -11,9 +11,9 @@ export default function OrderCard({ order, onRefresh }) {
   const [isDispatching, setIsDispatching] = useState(false);
 
   const getStatusColor = (status) => {
-    if (status === '100%') return 'bg-green-100 text-green-800 border-green-200';
-    if (status === '0%') return 'bg-red-100 text-red-800 border-red-200';
-    return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    if (status === 'Completed') return 'bg-green-100 text-green-800 border-green-200';
+    if (status === 'Pending') return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    return 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
   const getUrgencyIndicator = () => {
@@ -23,8 +23,7 @@ export default function OrderCard({ order, onRefresh }) {
     return '🟢';
   };
 
-  // Check if order is completed or currently being dispatched
-  const isLocked = order.dispatchStatus === '100%' || order.status === 'Completed' || isDispatching;
+  const isLocked = order.status === 'Completed' || isDispatching;
 
   const handleDispatchClick = () => {
     if (isLocked) return;
@@ -32,7 +31,7 @@ export default function OrderCard({ order, onRefresh }) {
   };
 
   const handleDispatchSuccess = () => {
-    setIsDispatching(true); // Lock immediately
+    setIsDispatching(true);
     setShowDispatchModal(false);
     onRefresh();
   };
@@ -59,8 +58,8 @@ export default function OrderCard({ order, onRefresh }) {
               <p className="text-xs text-gray-400 mt-1">{formatDate(order.orderDate)}</p>
             </div>
             
-            <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(order.dispatchStatus)}`}>
-              {order.dispatchStatus} Complete
+            <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(order.status)}`}>
+              {order.status}
             </span>
           </div>
 
@@ -73,12 +72,6 @@ export default function OrderCard({ order, onRefresh }) {
               <span className="text-gray-600">Total Quantity:</span>
               <span className="font-semibold text-gray-800">{order.totalQuantity} units</span>
             </div>
-            {order.partiallyDispatched > 0 && (
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-gray-600">Dispatched:</span>
-                <span className="font-semibold text-green-600">{order.partiallyDispatched} units</span>
-              </div>
-            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -94,7 +87,7 @@ export default function OrderCard({ order, onRefresh }) {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              {isLocked ? 'Dispatched' : 'Auto Dispatch'}
+              {isLocked ? 'Dispatched' : 'Dispatch'}
             </button>
             
             <button
