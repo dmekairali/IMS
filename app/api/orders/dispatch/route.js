@@ -1,46 +1,37 @@
-// pages/api/orders/dispatch.js
+// app/api/orders/dispatch/route.js
 import { getSheets } from '@/lib/googleSheets';
 
-export async function GET(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { orderId, productName, dispatches } = req.body;
+export async function POST(request) {
+  const { orderId, productName, dispatches } = await request.json();
 
   if (!orderId || !dispatches || dispatches.length === 0) {
-    return res.status(400).json({ error: 'Invalid request data' });
+    return Response.json({ error: 'Invalid request data' }, { status: 400 });
   }
 
   try {
     const sheets = await getSheets();
     
-    // 1. Validate and deduct stock from batches
     for (const dispatch of dispatches) {
       await deductBatchStock(sheets, dispatch.batchNo, dispatch.qty);
     }
 
-    // 2. Log transaction in IMS sheet
     await logTransaction(sheets, orderId, productName, dispatches);
-
-    // 3. Update order status
     await updateOrderStatus(sheets, orderId, dispatches);
 
-    res.status(200).json({ 
+    return Response.json({ 
       success: true, 
       message: 'Dispatched successfully',
       dispatches 
     });
   } catch (error) {
     console.error('Dispatch error:', error);
-    res.status(500).json({ error: error.message });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 }
 
 async function deductBatchStock(sheets, batchNo, qtyToDeduct) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_BATCHES;
   
-  // Read all batches
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: 'Batches!A2:Z',
@@ -50,11 +41,10 @@ async function deductBatchStock(sheets, batchNo, qtyToDeduct) {
   let batchRowIndex = -1;
   let currentQty = 0;
 
-  // Find the batch
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i][1] === batchNo) { // Column B = Batch No
-      batchRowIndex = i + 2; // +2 because sheet is 1-indexed and we start from row 2
-      currentQty = parseInt(rows[i][4] || '0'); // Column E = Available Qty
+    if (rows[i][1] === batchNo) {
+      batchRowIndex = i + 2;
+      currentQty = parseInt(rows[i][4] || '0');
       break;
     }
   }
@@ -67,19 +57,17 @@ async function deductBatchStock(sheets, batchNo, qtyToDeduct) {
     throw new Error(`Insufficient stock in batch ${batchNo}. Available: ${currentQty}, Requested: ${qtyToDeduct}`);
   }
 
-  // Update the quantity
   const newQty = currentQty - qtyToDeduct;
   
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `Batches!E${batchRowIndex}`, // Column E = Available Qty
+    range: `Batches!E${batchRowIndex}`,
     valueInputOption: 'RAW',
     resource: {
       values: [[newQty]]
     }
   });
 
-  // Verify the update (optimistic locking check)
   const verifyResponse = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `Batches!E${batchRowIndex}`,
@@ -99,13 +87,13 @@ async function logTransaction(sheets, orderId, productName, dispatches) {
   const timestamp = new Date().toISOString();
   
   const rows = dispatches.map(dispatch => [
-    `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Transaction ID
+    `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     orderId,
     productName,
     dispatch.batchNo,
     dispatch.qty,
     timestamp,
-    'System', // User - you can get from auth
+    'System',
     'Success'
   ]);
 
@@ -122,7 +110,6 @@ async function logTransaction(sheets, orderId, productName, dispatches) {
 async function updateOrderStatus(sheets, orderId, dispatches) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
   
-  // Read order
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: 'Orders!A2:Z',
@@ -144,26 +131,22 @@ async function updateOrderStatus(sheets, orderId, dispatches) {
     throw new Error(`Order ${orderId} not found`);
   }
 
-  // Parse items and update dispatched quantities
-  const items = JSON.parse(orderData[4] || '[]');
   const totalDispatched = dispatches.reduce((sum, d) => sum + d.qty, 0);
   const currentlyDispatched = parseInt(orderData[7] || '0');
   const newTotalDispatched = currentlyDispatched + totalDispatched;
   const totalOrdered = parseInt(orderData[5] || '0');
   
-  // Calculate dispatch percentage
   const dispatchPercentage = Math.round((newTotalDispatched / totalOrdered) * 100);
   const newStatus = dispatchPercentage === 100 ? 'Completed' : 'Partial';
 
-  // Update order row
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `Orders!D${orderRowIndex}:H${orderRowIndex}`, // Status, DispatchStatus, PartiallyDispatched
+    range: `Orders!D${orderRowIndex}:H${orderRowIndex}`,
     valueInputOption: 'RAW',
     resource: {
       values: [[
         newStatus,
-        orderData[4], // Items JSON (unchanged)
+        orderData[4],
         totalOrdered,
         `${dispatchPercentage}%`,
         newTotalDispatched
