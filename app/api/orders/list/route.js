@@ -1,19 +1,15 @@
-// pages/api/orders/list.js
+
+// app/api/orders/list/route.js
 import { getSheets } from '@/lib/googleSheets';
 
-export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function GET(request) {
   try {
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
 
-    // Fetch orders
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Orders!A2:Z', // Adjust range as needed
+      range: 'Orders!A2:Z',
     });
 
     const rows = response.data.values || [];
@@ -27,17 +23,16 @@ export default async function handler(req, res) {
       totalQuantity: parseInt(row[5] || '0'),
       dispatchStatus: row[6] || '0%',
       partiallyDispatched: parseInt(row[7] || '0'),
-      rowIndex: index + 2 // For updating later
+      rowIndex: index + 2
     }));
 
-    // Filter only pending/partial orders
     const pendingOrders = orders.filter(
       order => order.status !== 'Completed' && order.dispatchStatus !== '100%'
     );
 
-    res.status(200).json({ orders: pendingOrders });
+    return Response.json({ orders: pendingOrders });
   } catch (error) {
     console.error('Error fetching orders:', error);
-    res.status(500).json({ error: error.message });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 }
