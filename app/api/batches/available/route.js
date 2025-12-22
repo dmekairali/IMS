@@ -1,39 +1,52 @@
-// app/api/batches/available/route.js
-import { getSheets } from '@/lib/googleSheets';
+// app/api/batches/available/route.js - SKU-based
+import { getSheets, getBatchCache } from '@/lib/googleSheets';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const product = searchParams.get('product');
+  const sku = searchParams.get('sku');
 
-  if (!product) {
-    return Response.json({ error: 'Product name required' }, { status: 400 });
+  if (!sku) {
+    return Response.json({ error: 'SKU required' }, { status: 400 });
   }
 
   try {
-    const sheets = await getSheets();
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_BATCHES;
+    // Use cached data
+    const cached = getBatchCache();
+    let batches;
 
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'Batches!A2:Z',
-    });
+    if (cached) {
+      batches = cached;
+    } else {
+      // Fetch if not cached
+      const sheets = await getSheets();
+      const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_BATCHES;
 
-    const rows = response.data.values || [];
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'Batches!A2:Z',
+      });
+
+      const rows = response.data.values || [];
+      batches = rows.map(row => ({
+        batchNo: row[0],
+        batchDescription: row[1],
+        descriptionName: row[2],
+        size: row[3],
+        sku: row[4],
+        inQty: parseInt(row[5] || '0'),
+        outQty: parseInt(row[6] || '0'),
+        remaining: parseInt(row[7] || '0'),
+        batchDate: row[8],
+        expiryDate: row[9] || '',
+      }));
+    }
     
-    const batches = rows
-      .filter(row => row[0] === product && parseInt(row[4] || '0') > 0)
-      .map(row => ({
-        productName: row[0],
-        batchNo: row[1],
-        mfgDate: row[2],
-        expiryDate: row[3],
-        availableQty: parseInt(row[4] || '0'),
-        location: row[5] || '',
-        status: row[6] || 'Active'
-      }))
-      .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+    // Filter by SKU and only available stock
+    const availableBatches = batches
+      .filter(batch => batch.sku === sku && batch.remaining > 0)
+      .sort((a, b) => new Date(a.expiryDate || a.batchDate) - new Date(b.expiryDate || b.batchDate)); // FEFO
 
-    return Response.json({ batches });
+    return Response.json({ batches: availableBatches });
   } catch (error) {
     console.error('Error fetching batches:', error);
     return Response.json({ error: error.message }, { status: 500 });
