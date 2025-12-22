@@ -1,4 +1,4 @@
-// components/orders/OrderCard.jsx
+// components/orders/OrderCard.jsx - Add dispatch lock
 'use client';
 import { useState } from 'react';
 import OrderDetails from './OrderDetails';
@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/utils';
 export default function OrderCard({ order, onRefresh }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [isDispatching, setIsDispatching] = useState(false);
 
   const getStatusColor = (status) => {
     if (status === '100%') return 'bg-green-100 text-green-800 border-green-200';
@@ -22,9 +23,31 @@ export default function OrderCard({ order, onRefresh }) {
     return '🟢';
   };
 
+  // Check if order is completed or currently being dispatched
+  const isLocked = order.dispatchStatus === '100%' || order.status === 'Completed' || isDispatching;
+
+  const handleDispatchClick = () => {
+    if (isLocked) return;
+    setShowDispatchModal(true);
+  };
+
+  const handleDispatchSuccess = () => {
+    setIsDispatching(true); // Lock immediately
+    setShowDispatchModal(false);
+    onRefresh();
+  };
+
   return (
     <>
-      <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 active:shadow-lg transition-shadow">
+      <div className={`bg-white rounded-xl shadow-md overflow-hidden border transition-all ${
+        isLocked ? 'border-gray-300 opacity-60' : 'border-gray-100'
+      }`}>
+        {isLocked && (
+          <div className="bg-green-600 text-white text-xs font-bold py-1 px-4 text-center">
+            ✓ DISPATCHED - ORDER LOCKED
+          </div>
+        )}
+        
         <div className="p-4">
           <div className="flex justify-between items-start mb-3">
             <div className="flex-1">
@@ -60,13 +83,18 @@ export default function OrderCard({ order, onRefresh }) {
 
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => setShowDispatchModal(true)}
-              className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3.5 rounded-lg font-semibold active:from-blue-700 active:to-blue-800 transition-all shadow-sm"
+              onClick={handleDispatchClick}
+              disabled={isLocked}
+              className={`flex items-center justify-center gap-2 py-3.5 rounded-lg font-semibold transition-all shadow-sm ${
+                isLocked 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white active:from-blue-700 active:to-blue-800'
+              }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Auto Dispatch
+              {isLocked ? 'Dispatched' : 'Auto Dispatch'}
             </button>
             
             <button
@@ -88,14 +116,11 @@ export default function OrderCard({ order, onRefresh }) {
         )}
       </div>
 
-      {showDispatchModal && (
+      {showDispatchModal && !isLocked && (
         <DispatchModal
           order={order}
           onClose={() => setShowDispatchModal(false)}
-          onSuccess={() => {
-            setShowDispatchModal(false);
-            onRefresh();
-          }}
+          onSuccess={handleDispatchSuccess}
         />
       )}
     </>
