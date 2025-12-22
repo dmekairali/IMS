@@ -1,4 +1,4 @@
-// components/orders/PendingOrdersList.jsx
+// components/orders/PendingOrdersList.jsx - Load batches once
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
@@ -6,13 +6,19 @@ import LoadingSpinner from '../common/LoadingSpinner';
 import ErrorMessage from '../common/ErrorMessage';
 import EmptyState from '../common/EmptyState';
 import { useOrders } from '@/hooks/useOrders';
+import { useBatches } from '@/hooks/useBatches';
 
 export default function PendingOrdersList() {
   const { orders, loading, error, refreshOrders } = useOrders();
+  const { loadBatches, getBatchesBySKU } = useBatches();
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [ordersWithStockStatus, setOrdersWithStockStatus] = useState([]);
   const [checkingStock, setCheckingStock] = useState(true);
+
+  useEffect(() => {
+    initializePage();
+  }, []);
 
   useEffect(() => {
     if (orders.length > 0) {
@@ -20,42 +26,36 @@ export default function PendingOrdersList() {
     }
   }, [orders]);
 
-  async function checkAllOrdersStock() {
+  async function initializePage() {
+    await loadBatches();
+  }
+
+  function checkAllOrdersStock() {
     setCheckingStock(true);
     
-    const ordersWithStatus = await Promise.all(
-      orders.map(async (order) => {
-        try {
-          const checks = await Promise.all(
-            order.items.map(async (item) => {
-              const response = await fetch(`/api/batches/available?product=${encodeURIComponent(item.productName)}`);
-              const data = await response.json();
-              
-              const totalAvailable = data.batches.reduce((sum, batch) => sum + batch.availableQty, 0);
-              const qtyNeeded = item.quantityOrdered - (item.quantityDispatched || 0);
-              
-              return {
-                productName: item.productName,
-                needed: qtyNeeded,
-                available: totalAvailable,
-                shortage: qtyNeeded > totalAvailable ? qtyNeeded - totalAvailable : 0
-              };
-            })
-          );
+    const ordersWithStatus = orders.map(order => {
+      const checks = order.items.map(item => {
+        const availableBatches = getBatchesBySKU(item.sku);
+        const totalAvailable = availableBatches.reduce((sum, batch) => sum + batch.remaining, 0);
+        const qtyNeeded = item.quantityOrdered;
+        
+        return {
+          productName: item.productName,
+          sku: item.sku,
+          needed: qtyNeeded,
+          available: totalAvailable,
+          shortage: qtyNeeded > totalAvailable ? qtyNeeded - totalAvailable : 0
+        };
+      });
 
-          const itemsWithShortage = checks.filter(check => check.shortage > 0);
-          
-          return {
-            ...order,
-            canDispatch: itemsWithShortage.length === 0,
-            shortageInfo: itemsWithShortage
-          };
-        } catch (error) {
-          console.error('Error checking stock for order:', order.orderId, error);
-          return { ...order, canDispatch: true, shortageInfo: [] };
-        }
-      })
-    );
+      const itemsWithShortage = checks.filter(check => check.shortage > 0);
+      
+      return {
+        ...order,
+        canDispatch: itemsWithShortage.length === 0,
+        shortageInfo: itemsWithShortage
+      };
+    });
 
     setOrdersWithStockStatus(ordersWithStatus);
     setCheckingStock(false);
@@ -144,7 +144,8 @@ export default function PendingOrdersList() {
 
       <div className="fixed bottom-24 right-4">
         <button
-          onClick={() => {
+          onClick={async () => {
+            await loadBatches(true);
             refreshOrders();
             checkAllOrdersStock();
           }}
