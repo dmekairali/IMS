@@ -1,51 +1,14 @@
-// components/orders/OrderCard.jsx - Enhanced with shortage display
+// components/orders/OrderCard.jsx - Update to receive props
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import OrderDetails from './OrderDetails';
 import DispatchModal from './DispatchModal';
 import { formatDate } from '@/lib/utils';
 
-export default function OrderCard({ order, onRefresh }) {
+export default function OrderCard({ order, onRefresh, canDispatch, shortageInfo }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
-  const [canDispatch, setCanDispatch] = useState(true);
-  const [shortageInfo, setShortageInfo] = useState([]);
-  const [checkingStock, setCheckingStock] = useState(false);
-
-  useEffect(() => {
-    checkStockAvailability();
-  }, [order]);
-
-  async function checkStockAvailability() {
-    setCheckingStock(true);
-    try {
-      const checks = await Promise.all(
-        order.items.map(async (item) => {
-          const response = await fetch(`/api/batches/available?product=${encodeURIComponent(item.productName)}`);
-          const data = await response.json();
-          
-          const totalAvailable = data.batches.reduce((sum, batch) => sum + batch.availableQty, 0);
-          const qtyNeeded = item.quantityOrdered - (item.quantityDispatched || 0);
-          
-          return {
-            productName: item.productName,
-            needed: qtyNeeded,
-            available: totalAvailable,
-            shortage: qtyNeeded > totalAvailable ? qtyNeeded - totalAvailable : 0
-          };
-        })
-      );
-
-      const itemsWithShortage = checks.filter(check => check.shortage > 0);
-      setShortageInfo(itemsWithShortage);
-      setCanDispatch(itemsWithShortage.length === 0);
-    } catch (error) {
-      console.error('Error checking stock:', error);
-    } finally {
-      setCheckingStock(false);
-    }
-  }
 
   const getStatusColor = (status) => {
     if (status === 'Completed') return 'bg-green-100 text-green-800 border-green-200';
@@ -85,7 +48,7 @@ export default function OrderCard({ order, onRefresh }) {
           </div>
         )}
 
-        {!isLocked && !canDispatch && shortageInfo.length > 0 && (
+        {!isLocked && !canDispatch && shortageInfo && shortageInfo.length > 0 && (
           <div className="bg-red-600 text-white text-xs font-bold py-2 px-4">
             <div className="flex items-center gap-2">
               <span>⚠️ INSUFFICIENT STOCK</span>
