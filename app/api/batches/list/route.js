@@ -1,11 +1,7 @@
-// pages/api/batches/list.js
+// app/api/batches/list/route.js
 import { getSheets } from '@/lib/googleSheets';
 
-export async function GET(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function GET(request) {
   try {
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_BATCHES;
@@ -28,9 +24,9 @@ export async function GET(req, res) {
       status: row[7] || 'Active'
     }));
 
-    res.status(200).json({ batches });
+    return Response.json({ batches });
   } catch (error) {
     console.error('Error fetching batches:', error);
-    res.status(500).json({ error: error.message });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 }
