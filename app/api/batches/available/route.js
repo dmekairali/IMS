@@ -1,15 +1,12 @@
-// pages/api/batches/available.js
+// app/api/batches/available/route.js
 import { getSheets } from '@/lib/googleSheets';
 
-export async function GET(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { product } = req.query;
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const product = searchParams.get('product');
 
   if (!product) {
-    return res.status(400).json({ error: 'Product name required' });
+    return Response.json({ error: 'Product name required' }, { status: 400 });
   }
 
   try {
@@ -24,7 +21,7 @@ export async function GET(req, res) {
     const rows = response.data.values || [];
     
     const batches = rows
-      .filter(row => row[0] === product && parseInt(row[4] || '0') > 0) // Filter by product and available qty > 0
+      .filter(row => row[0] === product && parseInt(row[4] || '0') > 0)
       .map(row => ({
         productName: row[0],
         batchNo: row[1],
@@ -34,11 +31,11 @@ export async function GET(req, res) {
         location: row[5] || '',
         status: row[6] || 'Active'
       }))
-      .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate)); // FEFO sort
+      .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
-    res.status(200).json({ batches });
+    return Response.json({ batches });
   } catch (error) {
     console.error('Error fetching batches:', error);
-    res.status(500).json({ error: error.message });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 }
