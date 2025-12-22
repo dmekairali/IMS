@@ -1,74 +1,71 @@
-// components/orders/DispatchModal.jsx
+// components/orders/DispatchModal.jsx - Use cached batches + client-side deduction
 'use client';
 import { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
 import { toast } from '../common/Toast';
+import { useBatches } from '@/hooks/useBatches';
 
 export default function DispatchModal({ order, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [canDispatch, setCanDispatch] = useState(false);
   const [dispatchPlan, setDispatchPlan] = useState([]);
   const [shortageItems, setShortageItems] = useState([]);
+  const { getBatchesBySKU, reduceBatchQty } = useBatches();
 
   useEffect(() => {
     checkAvailability();
   }, [order]);
 
-  async function checkAvailability() {
+  function checkAvailability() {
     setLoading(true);
     
     try {
-      const checks = await Promise.all(
-        order.items.map(async (item) => {
-          const response = await fetch(`/api/batches/available?product=${encodeURIComponent(item.productName)}`);
-          const data = await response.json();
-          
-          const totalAvailable = data.batches.reduce((sum, batch) => sum + batch.availableQty, 0);
-          const qtyNeeded = item.quantityOrdered - (item.quantityDispatched || 0);
-          
-          return {
-            productName: item.productName,
-            needed: qtyNeeded,
-            available: totalAvailable,
-            canFulfill: totalAvailable >= qtyNeeded,
-            shortage: qtyNeeded - totalAvailable,
-            batches: data.batches
-          };
-        })
-      );
+      const checks = order.items.map(item => {
+        const availableBatches = getBatchesBySKU(item.sku);
+        const totalAvailable = availableBatches.reduce((sum, batch) => sum + batch.remaining, 0);
+        const qtyNeeded = item.quantityOrdered;
+        
+        return {
+          productName: item.productName,
+          sku: item.sku,
+          needed: qtyNeeded,
+          available: totalAvailable,
+          canFulfill: totalAvailable >= qtyNeeded,
+          shortage: qtyNeeded - totalAvailable,
+          batches: availableBatches
+        };
+      });
 
-      // Check if ALL items can be fully fulfilled
       const allAvailable = checks.every(check => check.canFulfill);
       setCanDispatch(allAvailable);
       
-      // Track items with shortage
       const itemsWithShortage = checks.filter(check => !check.canFulfill);
       setShortageItems(itemsWithShortage);
       
-      // Show toast if shortage exists
       if (itemsWithShortage.length > 0) {
         toast(`Cannot dispatch: Insufficient stock for ${itemsWithShortage.length} item(s)`, 'error');
       }
 
-      // Generate dispatch plan only if all available
       const plan = checks.map(check => {
         let remaining = check.needed;
         const allocations = [];
         
         for (const batch of check.batches) {
           if (remaining <= 0) break;
-          const qtyFromBatch = Math.min(batch.availableQty, remaining);
+          const qtyFromBatch = Math.min(batch.remaining, remaining);
           allocations.push({
             batchNo: batch.batchNo,
             qty: qtyFromBatch,
-            expiryDate: batch.expiryDate
+            sku: check.sku,
+            expiryDate: batch.expiryDate || batch.batchDate
           });
           remaining -= qtyFromBatch;
         }
         
         return {
           productName: check.productName,
+          sku: check.sku,
           allocations,
           needed: check.needed,
           available: check.available,
@@ -90,40 +87,46 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
       return;
     }
 
-    
-  // Validate: ensure we're not dispatching more than ordered
-  for (const plan of dispatchPlan) {
-    const totalToDispatch = plan.allocations.reduce((sum, alloc) => sum + alloc.qty, 0);
-    if (totalToDispatch > plan.needed) {
-      toast(`Error: Attempting to dispatch ${totalToDispatch} units but order only needs ${plan.needed} for ${plan.productName}`, 'error');
-      return;
+    // Validate: ensure we're not dispatching more than ordered
+    for (const plan of dispatchPlan) {
+      const totalToDispatch = plan.allocations.reduce((sum, alloc) => sum + alloc.qty, 0);
+      if (totalToDispatch > plan.needed) {
+        toast(`Error: Attempting to dispatch ${totalToDispatch} units but order only needs ${plan.needed} for ${plan.productName}`, 'error');
+        return;
+      }
     }
-  }
 
     setLoading(true);
 
     try {
-      for (const plan of dispatchPlan) {
-        const response = await fetch('/api/orders/dispatch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: order.orderId,
-            productName: plan.productName,
-            dispatches: plan.allocations
-          })
-        });
+      // Flatten all allocations
+      const allDispatches = dispatchPlan.flatMap(plan => plan.allocations);
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Dispatch failed');
-        }
+      // Optimistically reduce batch quantities client-side
+      allDispatches.forEach(dispatch => {
+        reduceBatchQty(dispatch.batchNo, dispatch.qty);
+      });
+
+      // Send to server
+      const response = await fetch('/api/orders/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.orderId,
+          dispatches: allDispatches
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Dispatch failed');
       }
 
       toast('Order dispatched successfully! ✓', 'success');
       onSuccess();
     } catch (error) {
       toast(error.message, 'error');
+      // On error, you may want to reload batches to revert optimistic update
     } finally {
       setLoading(false);
     }
@@ -138,7 +141,6 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
           <p className="text-sm text-gray-600">{order.items.length} items</p>
         </div>
 
-        {/* Shortage Alert - Show at top if exists */}
         {!loading && shortageItems.length > 0 && (
           <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
             <div className="flex items-start gap-3">
@@ -150,7 +152,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
                 <div className="space-y-1">
                   {shortageItems.map((item, idx) => (
                     <div key={idx} className="text-xs text-red-800">
-                      <span className="font-semibold">{item.productName}:</span> Need {item.needed}, Available {item.available} 
+                      <span className="font-semibold">{item.productName} (SKU: {item.sku}):</span> Need {item.needed}, Available {item.available} 
                       <span className="font-bold text-red-900"> (Short: {item.shortage})</span>
                     </div>
                   ))}
@@ -177,7 +179,10 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-semibold text-gray-800">{plan.productName}</h4>
+                  <div>
+                    <h4 className="font-semibold text-gray-800">{plan.productName}</h4>
+                    <p className="text-xs text-gray-600">SKU: {plan.sku}</p>
+                  </div>
                   {plan.shortage > 0 ? (
                     <span className="text-xs px-2 py-1 bg-red-200 text-red-900 rounded-full font-bold">
                       ❌ Short: {plan.shortage}
