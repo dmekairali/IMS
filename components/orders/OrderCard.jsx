@@ -1,6 +1,6 @@
-// components/orders/OrderCard.jsx - Remove % display
+// components/orders/OrderCard.jsx - Enhanced with shortage display
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import OrderDetails from './OrderDetails';
 import DispatchModal from './DispatchModal';
 import { formatDate } from '@/lib/utils';
@@ -9,6 +9,43 @@ export default function OrderCard({ order, onRefresh }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
+  const [canDispatch, setCanDispatch] = useState(true);
+  const [shortageInfo, setShortageInfo] = useState([]);
+  const [checkingStock, setCheckingStock] = useState(false);
+
+  useEffect(() => {
+    checkStockAvailability();
+  }, [order]);
+
+  async function checkStockAvailability() {
+    setCheckingStock(true);
+    try {
+      const checks = await Promise.all(
+        order.items.map(async (item) => {
+          const response = await fetch(`/api/batches/available?product=${encodeURIComponent(item.productName)}`);
+          const data = await response.json();
+          
+          const totalAvailable = data.batches.reduce((sum, batch) => sum + batch.availableQty, 0);
+          const qtyNeeded = item.quantityOrdered - (item.quantityDispatched || 0);
+          
+          return {
+            productName: item.productName,
+            needed: qtyNeeded,
+            available: totalAvailable,
+            shortage: qtyNeeded > totalAvailable ? qtyNeeded - totalAvailable : 0
+          };
+        })
+      );
+
+      const itemsWithShortage = checks.filter(check => check.shortage > 0);
+      setShortageInfo(itemsWithShortage);
+      setCanDispatch(itemsWithShortage.length === 0);
+    } catch (error) {
+      console.error('Error checking stock:', error);
+    } finally {
+      setCheckingStock(false);
+    }
+  }
 
   const getStatusColor = (status) => {
     if (status === 'Completed') return 'bg-green-100 text-green-800 border-green-200';
@@ -26,7 +63,7 @@ export default function OrderCard({ order, onRefresh }) {
   const isLocked = order.status === 'Completed' || isDispatching;
 
   const handleDispatchClick = () => {
-    if (isLocked) return;
+    if (isLocked || !canDispatch) return;
     setShowDispatchModal(true);
   };
 
@@ -38,12 +75,28 @@ export default function OrderCard({ order, onRefresh }) {
 
   return (
     <>
-      <div className={`bg-white rounded-xl shadow-md overflow-hidden border transition-all ${
-        isLocked ? 'border-gray-300 opacity-60' : 'border-gray-100'
+      <div className={`bg-white rounded-xl shadow-md overflow-hidden transition-all ${
+        isLocked ? 'border-2 border-gray-300 opacity-60' : 
+        !canDispatch ? 'border-2 border-red-400' : 'border border-gray-100'
       }`}>
         {isLocked && (
           <div className="bg-green-600 text-white text-xs font-bold py-1 px-4 text-center">
             ✓ DISPATCHED - ORDER LOCKED
+          </div>
+        )}
+
+        {!isLocked && !canDispatch && shortageInfo.length > 0 && (
+          <div className="bg-red-600 text-white text-xs font-bold py-2 px-4">
+            <div className="flex items-center gap-2">
+              <span>⚠️ INSUFFICIENT STOCK</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              {shortageInfo.map((item, idx) => (
+                <div key={idx} className="text-xs">
+                  {item.productName}: Need {item.needed}, Available {item.available} (Short: {item.shortage})
+                </div>
+              ))}
+            </div>
           </div>
         )}
         
@@ -77,17 +130,19 @@ export default function OrderCard({ order, onRefresh }) {
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={handleDispatchClick}
-              disabled={isLocked}
+              disabled={isLocked || !canDispatch}
               className={`flex items-center justify-center gap-2 py-3.5 rounded-lg font-semibold transition-all shadow-sm ${
                 isLocked 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' :
+                !canDispatch
+                  ? 'bg-red-300 text-red-800 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white active:from-blue-700 active:to-blue-800'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              {isLocked ? 'Dispatched' : 'Dispatch'}
+              {isLocked ? 'Dispatched' : !canDispatch ? 'Out of Stock' : 'Dispatch'}
             </button>
             
             <button
@@ -109,7 +164,7 @@ export default function OrderCard({ order, onRefresh }) {
         )}
       </div>
 
-      {showDispatchModal && !isLocked && (
+      {showDispatchModal && !isLocked && canDispatch && (
         <DispatchModal
           order={order}
           onClose={() => setShowDispatchModal(false)}
