@@ -90,6 +90,16 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
       return;
     }
 
+    
+  // Validate: ensure we're not dispatching more than ordered
+  for (const plan of dispatchPlan) {
+    const totalToDispatch = plan.allocations.reduce((sum, alloc) => sum + alloc.qty, 0);
+    if (totalToDispatch > plan.needed) {
+      toast(`Error: Attempting to dispatch ${totalToDispatch} units but order only needs ${plan.needed} for ${plan.productName}`, 'error');
+      return;
+    }
+  }
+
     setLoading(true);
 
     try {
