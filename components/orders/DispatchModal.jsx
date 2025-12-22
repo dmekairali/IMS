@@ -9,6 +9,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [canDispatch, setCanDispatch] = useState(false);
   const [dispatchPlan, setDispatchPlan] = useState([]);
+  const [shortageItems, setShortageItems] = useState([]);
 
   useEffect(() => {
     checkAvailability();
@@ -31,14 +32,26 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
             needed: qtyNeeded,
             available: totalAvailable,
             canFulfill: totalAvailable >= qtyNeeded,
+            shortage: qtyNeeded - totalAvailable,
             batches: data.batches
           };
         })
       );
 
+      // Check if ALL items can be fully fulfilled
       const allAvailable = checks.every(check => check.canFulfill);
       setCanDispatch(allAvailable);
       
+      // Track items with shortage
+      const itemsWithShortage = checks.filter(check => !check.canFulfill);
+      setShortageItems(itemsWithShortage);
+      
+      // Show toast if shortage exists
+      if (itemsWithShortage.length > 0) {
+        toast(`Cannot dispatch: Insufficient stock for ${itemsWithShortage.length} item(s)`, 'error');
+      }
+
+      // Generate dispatch plan only if all available
       const plan = checks.map(check => {
         let remaining = check.needed;
         const allocations = [];
@@ -57,6 +70,8 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
         return {
           productName: check.productName,
           allocations,
+          needed: check.needed,
+          available: check.available,
           shortage: remaining > 0 ? remaining : 0
         };
       });
@@ -71,7 +86,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
 
   async function handleAutoDispatch() {
     if (!canDispatch) {
-      toast('Cannot dispatch - insufficient stock', 'error');
+      toast('Cannot dispatch - insufficient stock for complete order', 'error');
       return;
     }
 
@@ -95,7 +110,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
         }
       }
 
-      toast('Order dispatched successfully!', 'success');
+      toast('Order dispatched successfully! ✓', 'success');
       onSuccess();
     } catch (error) {
       toast(error.message, 'error');
@@ -113,6 +128,28 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
           <p className="text-sm text-gray-600">{order.items.length} items</p>
         </div>
 
+        {/* Shortage Alert - Show at top if exists */}
+        {!loading && shortageItems.length > 0 && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">⚠️</div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-red-900 mb-2">
+                  Cannot Dispatch - Insufficient Stock
+                </p>
+                <div className="space-y-1">
+                  {shortageItems.map((item, idx) => (
+                    <div key={idx} className="text-xs text-red-800">
+                      <span className="font-semibold">{item.productName}:</span> Need {item.needed}, Available {item.available} 
+                      <span className="font-bold text-red-900"> (Short: {item.shortage})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-8">
             <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
@@ -121,24 +158,39 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
         ) : (
           <div className="space-y-3">
             {dispatchPlan.map((plan, index) => (
-              <div key={index} className="border rounded-lg p-3">
+              <div 
+                key={index} 
+                className={`border-2 rounded-lg p-3 ${
+                  plan.shortage > 0 
+                    ? 'border-red-300 bg-red-50' 
+                    : 'border-green-300 bg-green-50'
+                }`}
+              >
                 <div className="flex justify-between items-start mb-2">
                   <h4 className="font-semibold text-gray-800">{plan.productName}</h4>
                   {plan.shortage > 0 ? (
-                    <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full font-medium">
-                      Short: {plan.shortage}
+                    <span className="text-xs px-2 py-1 bg-red-200 text-red-900 rounded-full font-bold">
+                      ❌ Short: {plan.shortage}
                     </span>
                   ) : (
-                    <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full font-medium">
-                      ✓ Available
+                    <span className="text-xs px-2 py-1 bg-green-200 text-green-900 rounded-full font-bold">
+                      ✓ Full Stock
                     </span>
                   )}
                 </div>
                 
+                <div className="text-xs text-gray-600 mb-2">
+                  Required: <span className="font-semibold">{plan.needed}</span> | 
+                  Available: <span className={`font-semibold ${plan.shortage > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                    {plan.available}
+                  </span>
+                </div>
+                
                 {plan.allocations.length > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-1 mt-2 pt-2 border-t border-gray-300">
+                    <p className="text-xs font-semibold text-gray-700 mb-1">Batch Allocation:</p>
                     {plan.allocations.map((alloc, i) => (
-                      <div key={i} className="text-sm text-gray-600 flex justify-between">
+                      <div key={i} className="text-xs text-gray-700 flex justify-between bg-white px-2 py-1 rounded">
                         <span>{alloc.batchNo}</span>
                         <span className="font-medium">{alloc.qty} units</span>
                       </div>
@@ -147,14 +199,6 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
                 )}
               </div>
             ))}
-          </div>
-        )}
-
-        {!loading && !canDispatch && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800 font-medium">
-              ⚠️ Cannot fully dispatch this order due to insufficient stock
-            </p>
           </div>
         )}
 
@@ -167,7 +211,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
             disabled={!canDispatch || loading}
             className="flex-1"
           >
-            {loading ? 'Dispatching...' : 'Confirm Dispatch'}
+            {loading ? 'Dispatching...' : canDispatch ? 'Confirm Full Dispatch' : 'Cannot Dispatch'}
           </Button>
         </div>
       </div>
