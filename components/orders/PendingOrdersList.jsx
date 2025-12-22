@@ -1,19 +1,19 @@
-// components/orders/PendingOrdersList.jsx
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
 import LoadingSpinner from '../common/LoadingSpinner';
+import ErrorMessage from '../common/ErrorMessage';
+import EmptyState from '../common/EmptyState';
 import { useOrders } from '@/hooks/useOrders';
 
 export default function PendingOrdersList() {
   const { orders, loading, error, refreshOrders } = useOrders();
-  const [filter, setFilter] = useState('all'); // all, pending, partial, urgent
+  const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredOrders = orders.filter(order => {
-    // Filter logic
-    const matchesSearch = order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         order.orderId.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesFilter = 
       filter === 'all' ? true :
@@ -29,7 +29,6 @@ export default function PendingOrdersList() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header with Search */}
       <div className="sticky top-0 z-10 bg-white shadow-sm">
         <div className="p-4">
           <h1 className="text-2xl font-bold text-gray-800 mb-3">
@@ -39,7 +38,6 @@ export default function PendingOrdersList() {
             </span>
           </h1>
           
-          {/* Search Bar */}
           <div className="relative">
             <input
               type="text"
@@ -54,7 +52,6 @@ export default function PendingOrdersList() {
           </div>
         </div>
 
-        {/* Filter Pills */}
         <div className="flex gap-2 px-4 pb-3 overflow-x-auto hide-scrollbar">
           {['all', 'pending', 'partial', 'urgent'].map(f => (
             <button
@@ -72,7 +69,6 @@ export default function PendingOrdersList() {
         </div>
       </div>
 
-      {/* Orders List */}
       <div className="p-4 space-y-3">
         {filteredOrders.length === 0 ? (
           <EmptyState message="No orders found" />
@@ -83,7 +79,6 @@ export default function PendingOrdersList() {
         )}
       </div>
 
-      {/* Pull to Refresh Indicator */}
       <div className="fixed bottom-24 right-4">
         <button
           onClick={refreshOrders}
