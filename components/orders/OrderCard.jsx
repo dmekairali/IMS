@@ -2,6 +2,7 @@
 'use client';
 import { useState } from 'react';
 import OrderDetails from './OrderDetails';
+import DispatchModal from './DispatchModal';
 import { formatDate } from '@/lib/utils';
 
 export default function OrderCard({ order, onRefresh }) {
@@ -24,7 +25,6 @@ export default function OrderCard({ order, onRefresh }) {
   return (
     <>
       <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 active:shadow-lg transition-shadow">
-        {/* Card Header */}
         <div className="p-4">
           <div className="flex justify-between items-start mb-3">
             <div className="flex-1">
@@ -36,13 +36,11 @@ export default function OrderCard({ order, onRefresh }) {
               <p className="text-xs text-gray-400 mt-1">{formatDate(order.orderDate)}</p>
             </div>
             
-            {/* Status Badge */}
             <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(order.dispatchStatus)}`}>
               {order.dispatchStatus} Complete
             </span>
           </div>
 
-          {/* Order Summary */}
           <div className="bg-gray-50 rounded-lg p-3 mb-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total Items:</span>
@@ -60,7 +58,6 @@ export default function OrderCard({ order, onRefresh }) {
             )}
           </div>
 
-          {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setShowDispatchModal(true)}
@@ -84,7 +81,6 @@ export default function OrderCard({ order, onRefresh }) {
           </div>
         </div>
 
-        {/* Expandable Details */}
         {isExpanded && (
           <div className="border-t border-gray-100 bg-gray-50">
             <OrderDetails order={order} />
@@ -92,7 +88,6 @@ export default function OrderCard({ order, onRefresh }) {
         )}
       </div>
 
-      {/* Dispatch Modal */}
       {showDispatchModal && (
         <DispatchModal
           order={order}
