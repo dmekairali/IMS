@@ -1,3 +1,4 @@
+
 // components/batches/BatchSelector.jsx
 'use client';
 import { useState, useEffect } from 'react';
@@ -5,6 +6,7 @@ import { useBatches } from '@/hooks/useBatches';
 import BatchCard from './BatchCard';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
+import LoadingSpinner from '../common/LoadingSpinner';
 
 export default function BatchSelector({ product, orderId, onClose, onSuccess }) {
   const { getBatchesForProduct, loading } = useBatches();
