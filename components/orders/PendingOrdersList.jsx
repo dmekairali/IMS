@@ -11,21 +11,73 @@ export default function PendingOrdersList() {
   const { orders, loading, error, refreshOrders } = useOrders();
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [ordersWithStockStatus, setOrdersWithStockStatus] = useState([]);
+  const [checkingStock, setCheckingStock] = useState(true);
 
-  const filteredOrders = orders.filter(order => {
+  useEffect(() => {
+    if (orders.length > 0) {
+      checkAllOrdersStock();
+    }
+  }, [orders]);
+
+  async function checkAllOrdersStock() {
+    setCheckingStock(true);
+    
+    const ordersWithStatus = await Promise.all(
+      orders.map(async (order) => {
+        try {
+          const checks = await Promise.all(
+            order.items.map(async (item) => {
+              const response = await fetch(`/api/batches/available?product=${encodeURIComponent(item.productName)}`);
+              const data = await response.json();
+              
+              const totalAvailable = data.batches.reduce((sum, batch) => sum + batch.availableQty, 0);
+              const qtyNeeded = item.quantityOrdered - (item.quantityDispatched || 0);
+              
+              return {
+                productName: item.productName,
+                needed: qtyNeeded,
+                available: totalAvailable,
+                shortage: qtyNeeded > totalAvailable ? qtyNeeded - totalAvailable : 0
+              };
+            })
+          );
+
+          const itemsWithShortage = checks.filter(check => check.shortage > 0);
+          
+          return {
+            ...order,
+            canDispatch: itemsWithShortage.length === 0,
+            shortageInfo: itemsWithShortage
+          };
+        } catch (error) {
+          console.error('Error checking stock for order:', order.orderId, error);
+          return { ...order, canDispatch: true, shortageInfo: [] };
+        }
+      })
+    );
+
+    setOrdersWithStockStatus(ordersWithStatus);
+    setCheckingStock(false);
+  }
+
+  const filteredOrders = ordersWithStockStatus.filter(order => {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesFilter = 
       filter === 'all' ? true :
       filter === 'pending' ? order.status === 'Pending' :
-      filter === 'urgent' ? isUrgent(order.orderDate) : true;
+      filter === 'urgent' ? isUrgent(order.orderDate) :
+      filter === 'outofstock' ? !order.canDispatch : true;
     
     return matchesSearch && matchesFilter;
   });
 
-  if (loading) return <LoadingSpinner />;
+  if (loading || checkingStock) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={refreshOrders} />;
+
+  const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch).length;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -53,7 +105,7 @@ export default function PendingOrdersList() {
         </div>
 
         <div className="flex gap-2 px-4 pb-3 overflow-x-auto hide-scrollbar">
-          {['all', 'pending', 'urgent'].map(f => (
+          {['all', 'pending', 'urgent', 'outofstock'].map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -63,7 +115,8 @@ export default function PendingOrdersList() {
                   : 'bg-gray-100 text-gray-700 active:bg-gray-200'
               }`}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'outofstock' ? `Out of Stock${outOfStockCount > 0 ? ` (${outOfStockCount})` : ''}` : 
+               f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>
@@ -71,17 +124,30 @@ export default function PendingOrdersList() {
 
       <div className="p-4 space-y-3">
         {filteredOrders.length === 0 ? (
-          <EmptyState message="No orders found" />
+          <EmptyState message={
+            filter === 'outofstock' 
+              ? 'No orders with stock shortage' 
+              : 'No orders found'
+          } />
         ) : (
           filteredOrders.map(order => (
-            <OrderCard key={order.orderId} order={order} onRefresh={refreshOrders} />
+            <OrderCard 
+              key={order.orderId} 
+              order={order} 
+              onRefresh={refreshOrders}
+              canDispatch={order.canDispatch}
+              shortageInfo={order.shortageInfo}
+            />
           ))
         )}
       </div>
 
       <div className="fixed bottom-24 right-4">
         <button
-          onClick={refreshOrders}
+          onClick={() => {
+            refreshOrders();
+            checkAllOrdersStock();
+          }}
           className="bg-blue-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform"
           aria-label="Refresh orders"
         >
