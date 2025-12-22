@@ -1,3 +1,4 @@
+// components/orders/PendingOrdersList.jsx
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
@@ -17,8 +18,7 @@ export default function PendingOrdersList() {
     
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'pending' ? order.dispatchStatus === '0%' :
-      filter === 'partial' ? order.dispatchStatus !== '0%' && order.dispatchStatus !== '100%' :
+      filter === 'pending' ? order.status === 'Pending' :
       filter === 'urgent' ? isUrgent(order.orderDate) : true;
     
     return matchesSearch && matchesFilter;
@@ -53,7 +53,7 @@ export default function PendingOrdersList() {
         </div>
 
         <div className="flex gap-2 px-4 pb-3 overflow-x-auto hide-scrollbar">
-          {['all', 'pending', 'partial', 'urgent'].map(f => (
+          {['all', 'pending', 'urgent'].map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
