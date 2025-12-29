@@ -1,4 +1,4 @@
-// components/orders/OrderDetails.jsx
+// components/orders/OrderDetails.jsx - Show package info
 'use client';
 import { useState } from 'react';
 import BatchSelector from '../batches/BatchSelector';
@@ -13,52 +13,35 @@ export default function OrderDetails({ order }) {
           <div className="flex justify-between items-start mb-2">
             <div className="flex-1">
               <h4 className="font-semibold text-gray-800">{item.productName}</h4>
-              <p className="text-sm text-gray-500">{item.packSize}</p>
+              <p className="text-xs text-gray-500">SKU: {item.sku}</p>
+              <p className="text-xs text-gray-500">Package: {item.package}</p>
+              <p className="text-xs text-gray-500">MRP: ₹{item.mrp}</p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-600">Ordered</p>
+              <p className="text-sm text-gray-600">Qty</p>
               <p className="text-lg font-bold text-gray-800">{item.quantityOrdered}</p>
+              <p className="text-xs text-green-700 font-semibold">₹{item.total?.toFixed(2)}</p>
             </div>
           </div>
-
-          {/* Progress Bar */}
-          <div className="mb-3">
-            <div className="flex justify-between text-xs text-gray-600 mb-1">
-              <span>Dispatched: {item.quantityDispatched || 0}</span>
-              <span>Pending: {item.quantityOrdered - (item.quantityDispatched || 0)}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${((item.quantityDispatched || 0) / item.quantityOrdered) * 100}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Manual Dispatch Button */}
-          {item.quantityOrdered > (item.quantityDispatched || 0) && (
-            <button
-              onClick={() => setSelectedProduct(item)}
-              className="w-full bg-blue-50 text-blue-700 py-2.5 rounded-lg font-medium active:bg-blue-100 transition-colors"
-            >
-              Select Batches to Dispatch
-            </button>
-          )}
         </div>
       ))}
-
-      {/* Batch Selector Modal */}
-      {selectedProduct && (
-        <BatchSelector
-          product={selectedProduct}
-          orderId={order.orderId}
-          onClose={() => setSelectedProduct(null)}
-          onSuccess={() => {
-            setSelectedProduct(null);
-            // Trigger refresh
-          }}
-        />
-      )}
     </div>
   );
 }
+```
+
+**Test with this demo data:**
+
+**DispatchData sheet:**
+```
+Timestamp	Buyer ID	Oder ID	Name of Client	Mobile	Order Type	Invoice Amount	Order Taken By	Invoice No	Invoice Link	Dispatch From	Planned	Actual	Time Delay	Remarks	Dispatch Status	Dispatched	Dispatched Date
+2024-12-20 10:30:00	B001	ORD001	Wellness Pharmacy	9876543210	Retail	15000	Sales Team	INV001		Mumbai			0		Pending		
+2024-12-21 14:15:00	B002	ORD002	Apollo Medical	9876543211	Wholesale	25000	Sales Team	INV002		Mumbai			0		Pending		
+```
+
+**All Form Data sheet:**
+```
+Order Id	Products	MRP	Package	Qty	Total	SKU(All)
+ORD001	Ashwagandha Tablets	300	60 tabs	500	150000	ASH-TAB-60
+ORD002	Triphala Churna	150	100g	300	45000	TRI-CHU-100
+ORD002	Chyawanprash	400	500g	200	80000	CHY-500
