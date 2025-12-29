@@ -1,4 +1,4 @@
-// components/orders/OrderCard.jsx - Update to receive props
+// components/orders/OrderCard.jsx - Display invoice amount
 'use client';
 import { useState } from 'react';
 import OrderDetails from './OrderDetails';
@@ -72,6 +72,9 @@ export default function OrderCard({ order, onRefresh, canDispatch, shortageInfo 
               </div>
               <p className="text-sm text-gray-500">Order #{order.orderId}</p>
               <p className="text-xs text-gray-400 mt-1">{formatDate(order.orderDate)}</p>
+              {order.mobile && (
+                <p className="text-xs text-gray-400">📱 {order.mobile}</p>
+              )}
             </div>
             
             <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(order.status)}`}>
@@ -87,6 +90,10 @@ export default function OrderCard({ order, onRefresh, canDispatch, shortageInfo 
             <div className="flex justify-between text-sm mt-1">
               <span className="text-gray-600">Total Quantity:</span>
               <span className="font-semibold text-gray-800">{order.totalQuantity} units</span>
+            </div>
+            <div className="flex justify-between text-sm mt-1">
+              <span className="text-gray-600">Invoice Amount:</span>
+              <span className="font-semibold text-green-700">₹{order.invoiceAmount?.toFixed(2)}</span>
             </div>
           </div>
 
