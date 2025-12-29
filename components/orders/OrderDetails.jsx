@@ -28,20 +28,3 @@ export default function OrderDetails({ order }) {
     </div>
   );
 }
-```
-
-**Test with this demo data:**
-
-**DispatchData sheet:**
-```
-Timestamp	Buyer ID	Oder ID	Name of Client	Mobile	Order Type	Invoice Amount	Order Taken By	Invoice No	Invoice Link	Dispatch From	Planned	Actual	Time Delay	Remarks	Dispatch Status	Dispatched	Dispatched Date
-2024-12-20 10:30:00	B001	ORD001	Wellness Pharmacy	9876543210	Retail	15000	Sales Team	INV001		Mumbai			0		Pending		
-2024-12-21 14:15:00	B002	ORD002	Apollo Medical	9876543211	Wholesale	25000	Sales Team	INV002		Mumbai			0		Pending		
-```
-
-**All Form Data sheet:**
-```
-Order Id	Products	MRP	Package	Qty	Total	SKU(All)
-ORD001	Ashwagandha Tablets	300	60 tabs	500	150000	ASH-TAB-60
-ORD002	Triphala Churna	150	100g	300	45000	TRI-CHU-100
-ORD002	Chyawanprash	400	500g	200	80000	CHY-500
