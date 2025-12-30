@@ -40,7 +40,7 @@ export async function POST(request) {
 
     // Generate Packing List PDF
     console.log('📄 Generating packing list PDF...');
-    const packingListPDF = generatePackingListPDF(order, packingItems, jsPDF);
+    const packingListPDF = await generatePackingListPDF(order, packingItems, jsPDF);
     console.log('✅ Packing list PDF generated');
     
     const packingListBuffer = Buffer.from(packingListPDF.output('arraybuffer'));
@@ -56,7 +56,7 @@ export async function POST(request) {
 
     // Generate Stickers PDF
     console.log('🏷️ Generating stickers PDF...');
-    const stickersPDF = generateStickersPDF(order, packingItems, jsPDF);
+    const stickersPDF = await generateStickersPDF(order, packingItems, jsPDF);
     console.log('✅ Stickers PDF generated');
     
     const stickersBuffer = Buffer.from(stickersPDF.output('arraybuffer'));
@@ -108,224 +108,437 @@ export async function POST(request) {
   }
 }
 
-function generatePackingListPDF(order, packingItems, jsPDF) {
-  const doc = new jsPDF();
+async function addLogoToPDF(doc) {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const logoPath = path.default.join(process.cwd(), 'public', 'kairali-logo.png');
+    
+    if (fs.default.existsSync(logoPath)) {
+      const logoData = fs.default.readFileSync(logoPath);
+      const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
+      doc.addImage(logoBase64, 'PNG', 15, 10, 30, 15); // x, y, width, height
+      return true;
+    }
+  } catch (error) {
+    console.log('Logo not found, continuing without logo');
+  }
+  return false;
+}
+
+async function generatePackingListPDF(order, packingItems, jsPDF) {
+  // A6 size: 105mm x 148mm (4.13" x 5.83")
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [105, 148],
+    compress: true
+  });
+  
+  // Custom margins (in mm)
+  const margins = {
+    top: 0,
+    bottom: 5.36, // 0.211 inches = 5.36mm
+    left: 0,
+    right: 0
+  };
+  
+  // Add logo
+  const hasLogo = await addLogoToPDF(doc);
+  const startY = hasLogo ? 5 : 8;
   
   // Company header
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Kairali Ayurvedic Products Pvt Ltd', 105, 20, { align: 'center' });
-  
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('121/1-A1, Karattupalayam, Samathur, Pollachi - 642123', 105, 27, { align: 'center' });
-  
-  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text('Packing List', 105, 37, { align: 'center' });
-
-  // Order details section
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('To', 15, 50);
-  doc.text('Order ID', 140, 50);
-  doc.text(`: ${order.orderId || 'N/A'}`, 170, 50);
-
+  doc.text('Kairali Ayurvedic Products Pvt Ltd', 52.5, startY + 3, { align: 'center' });
+  
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text('Party Name', 15, 57);
-  doc.text(`: ${order.customerName || 'N/A'}`, 42, 57);
+  doc.text('121/1-A1, Karattupalayam, Samathur, Pollachi - 642123', 52.5, startY + 8, { align: 'center' });
   
-  doc.text('Invoice No', 140, 57);
-  doc.text(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 170, 57);
+  // Packing List title with border
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.rect(32, startY + 11, 41, 5);
+  doc.text('Packing List', 52.5, startY + 14.5, { align: 'center' });
 
-  doc.text('Party Address', 15, 64);
-  doc.text(':', 42, 64);
+  // Order details section with border
+  let yPos = startY + 19;
+  doc.setLineWidth(0.2);
+  doc.rect(3, yPos, 99, 22); // Outer border
   
-  const address = order.billingAddress || order.shippingAddress || order.mobile || 'N/A';
-  const addressLines = doc.splitTextToSize(address, 85);
-  doc.text(addressLines, 45, 64);
+  // Vertical divider
+  doc.line(52.5, yPos, 52.5, yPos + 22);
 
-  doc.text('Invoice Date', 140, 64);
-  doc.text(`: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`, 170, 64);
+  // Left side
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('To', 4, yPos + 3);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text('Party Name', 4, yPos + 7);
+  doc.text(`: ${order.customerName || 'N/A'}`, 18, yPos + 7);
+  
+  doc.text('Party Address', 4, yPos + 11);
+  doc.text(':', 18, yPos + 11);
+  const address = order.shippingAddress || order.billingAddress || 'N/A';
+  const addressLines = doc.splitTextToSize(address, 30);
+  doc.text(addressLines, 19, yPos + 11);
+  
+  const addressHeight = Math.min(addressLines.length * 3, 8);
+  doc.text('Contact No.', 4, yPos + 11 + addressHeight + 2);
+  doc.text(`: ${order.mobile || 'N/A'}`, 18, yPos + 11 + addressHeight + 2);
 
-  const addressHeight = addressLines.length * 5;
-  doc.text('Contact No.', 15, 64 + addressHeight);
-  doc.text(`: ${order.mobile || 'N/A'}`, 42, 64 + addressHeight);
-
+  // Right side
+  doc.setFont('helvetica', 'bold');
+  doc.text('Order ID', 54, yPos + 3);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${order.orderId || 'N/A'}`, 66, yPos + 3);
+  
+  doc.text('Invoice No', 54, yPos + 7);
+  doc.text(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 66, yPos + 7);
+  
+  doc.text('Invoice Date', 54, yPos + 11);
+  doc.text(`: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 66, yPos + 11);
+  
   const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
-  doc.text('No of Boxes', 140, 71);
-  doc.text(`: ${totalBoxes}`, 170, 71);
+  doc.text('No of Boxes', 54, yPos + 15);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`: ${totalBoxes}`, 66, yPos + 15);
+
+  yPos = yPos + 25;
 
   // Group items by box number
-  const itemsByBox = packingItems.reduce((acc, item) => {
-    if (!acc[item.boxNo]) acc[item.boxNo] = [];
-    acc[item.boxNo].push(item);
-    return acc;
-  }, {});
+  const itemsByBox = {};
+  packingItems.forEach(item => {
+    if (!itemsByBox[item.boxNo]) {
+      itemsByBox[item.boxNo] = [];
+    }
+    itemsByBox[item.boxNo].push(item);
+  });
 
-  let yPos = 85 + addressHeight;
+  // Table headers
+  doc.setFillColor(220, 220, 220);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  
+  // Column widths: Box No | Product Details | UOM | Quantity
+  const colWidths = [12, 62, 12, 12];
+  const colX = [3, 15, 77, 89];
+  
+  // Draw header cells
+  colWidths.forEach((width, i) => {
+    doc.rect(colX[i], yPos, width, 5, 'FD');
+  });
+  
+  doc.text('Box No', colX[0] + colWidths[0]/2, yPos + 3.5, { align: 'center' });
+  doc.text('Product Details', colX[1] + 1, yPos + 3.5);
+  doc.text('UOM', colX[2] + colWidths[2]/2, yPos + 3.5, { align: 'center' });
+  doc.text('Quantity', colX[3] + colWidths[3]/2, yPos + 3.5, { align: 'center' });
 
-  // Generate table for each box
-  Object.keys(itemsByBox).sort((a, b) => a - b).forEach((boxNo) => {
+  yPos += 5;
+
+  // Table rows - one row per box
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  
+  const sortedBoxNos = Object.keys(itemsByBox).sort((a, b) => parseInt(a) - parseInt(b));
+  
+  sortedBoxNos.forEach((boxNo) => {
     const boxItems = itemsByBox[boxNo];
+    
+    if (yPos > 140) {
+      doc.addPage();
+      yPos = 10;
+      
+      // Redraw headers
+      doc.setFillColor(220, 220, 220);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      
+      colWidths.forEach((width, i) => {
+        doc.rect(colX[i], yPos, width, 5, 'FD');
+      });
+      
+      doc.text('Box No', colX[0] + colWidths[0]/2, yPos + 3.5, { align: 'center' });
+      doc.text('Product Details', colX[1] + 1, yPos + 3.5);
+      doc.text('UOM', colX[2] + colWidths[2]/2, yPos + 3.5, { align: 'center' });
+      doc.text('Quantity', colX[3] + colWidths[3]/2, yPos + 3.5, { align: 'center' });
+      
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6);
+    }
 
-    doc.setFillColor(26, 188, 156);
-    doc.rect(15, yPos, 180, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Box No: ${boxNo}`, 20, yPos + 5.5);
-    doc.setTextColor(0, 0, 0);
-
-    yPos += 8;
-
-    doc.setFillColor(204, 204, 204);
-    doc.rect(15, yPos, 100, 7, 'F');
-    doc.rect(115, yPos, 25, 7, 'F');
-    doc.rect(140, yPos, 25, 7, 'F');
-    doc.rect(165, yPos, 30, 7, 'F');
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('Product Details', 17, yPos + 5);
-    doc.text('UOM', 125, yPos + 5, { align: 'center' });
-    doc.text('Ordered', 152.5, yPos + 5, { align: 'center' });
-    doc.text('Packing', 180, yPos + 5, { align: 'center' });
-
-    yPos += 7;
-
-    doc.setFont('helvetica', 'normal');
+    const productLines = [];
+    const uomLines = [];
+    const qtyLines = [];
+    
     boxItems.forEach((item) => {
-      if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
-      }
-
-      const productDetail = `${item.productName} - ${item.sku}`;
-      const lines = doc.splitTextToSize(productDetail, 95);
-      const rowHeight = Math.max(lines.length * 5, 7);
-
-      doc.rect(15, yPos, 100, rowHeight);
-      doc.rect(115, yPos, 25, rowHeight);
-      doc.rect(140, yPos, 25, rowHeight);
-      doc.rect(165, yPos, 30, rowHeight);
-
-      doc.text(lines, 17, yPos + 5);
-      doc.text(item.package, 127.5, yPos + rowHeight / 2 + 1.5, { align: 'center' });
-      doc.text(item.orderedQty.toString(), 152.5, yPos + rowHeight / 2 + 1.5, { align: 'center' });
-      doc.text(item.packingQty.toString(), 180, yPos + rowHeight / 2 + 1.5, { align: 'center' });
-
-      yPos += rowHeight;
+      productLines.push(`${item.productName} - ${item.sku}`);
+      uomLines.push(item.package || 'N/A');
+      qtyLines.push(item.packingQty.toString());
     });
 
-    yPos += 5;
+    const rowHeight = Math.max(boxItems.length * 5, 6);
+
+    // Draw cell borders
+    colWidths.forEach((width, i) => {
+      doc.rect(colX[i], yPos, width, rowHeight);
+    });
+
+    // Box Number
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(boxNo.toString(), colX[0] + colWidths[0]/2, yPos + rowHeight/2 + 1, { align: 'center' });
+    
+    // Product details
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    let lineYPos = yPos + 3;
+    productLines.forEach((line, index) => {
+      const wrappedLines = doc.splitTextToSize(line, colWidths[1] - 2);
+      doc.text(wrappedLines, colX[1] + 1, lineYPos);
+      lineYPos += wrappedLines.length * 3;
+      if (index < productLines.length - 1) {
+        lineYPos += 2;
+      }
+    });
+    
+    // UOM
+    lineYPos = yPos + 3;
+    uomLines.forEach((uom) => {
+      doc.text(uom, colX[2] + colWidths[2]/2, lineYPos, { align: 'center' });
+      lineYPos += 5;
+    });
+    
+    // Quantity
+    doc.setFont('helvetica', 'bold');
+    lineYPos = yPos + 3;
+    qtyLines.forEach((qty) => {
+      doc.text(qty, colX[3] + colWidths[3]/2, lineYPos, { align: 'center' });
+      lineYPos += 5;
+    });
+    doc.setFont('helvetica', 'normal');
+
+    yPos += rowHeight;
   });
 
   return doc;
 }
 
-function generateStickersPDF(order, packingItems, jsPDF) {
-  const doc = new jsPDF();
-  let yPos = 15;
+async function generateStickersPDF(order, packingItems, jsPDF) {
+  // A6 size: 105mm x 148mm
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [105, 148],
+    compress: true
+  });
 
-  const itemsByBox = packingItems.reduce((acc, item) => {
-    if (!acc[item.boxNo]) acc[item.boxNo] = [];
-    acc[item.boxNo].push(item);
-    return acc;
-  }, {});
+  // Custom margins
+  const margins = {
+    top: 0,
+    bottom: 5.36,
+    left: 0,
+    right: 0
+  };
+
+  // Group items by box number
+  const itemsByBox = {};
+  packingItems.forEach(item => {
+    if (!itemsByBox[item.boxNo]) {
+      itemsByBox[item.boxNo] = [];
+    }
+    itemsByBox[item.boxNo].push(item);
+  });
 
   const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
+  const sortedBoxNos = Object.keys(itemsByBox).sort((a, b) => parseInt(a) - parseInt(b));
 
-  Object.keys(itemsByBox).sort((a, b) => a - b).forEach((boxNo, index) => {
-    if (index > 0) {
-      doc.addPage();
-      yPos = 15;
-    }
+  let currentYPos = 0;
+  const stickerHeight = 74; // Half of A6 height for 2 stickers per page
+  let stickersOnPage = 0;
 
+  sortedBoxNos.forEach((boxNo, boxIndex) => {
     const boxItems = itemsByBox[boxNo];
 
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Kairali Ayurvedic Products Pvt Ltd', 105, yPos, { align: 'center' });
+    // Check if we need a new page (after every 2 stickers)
+    if (stickersOnPage >= 2) {
+      doc.addPage();
+      currentYPos = 0;
+      stickersOnPage = 0;
+    }
+
+    // Add dotted cut line between stickers (not before first sticker)
+    if (stickersOnPage > 0) {
+      doc.setLineDash([2, 2]);
+      doc.setLineWidth(0.1);
+      doc.setDrawColor(150, 150, 150);
+      doc.line(0, currentYPos, 105, currentYPos);
+      doc.setLineDash([]); // Reset to solid line
+    }
+
+    let yPos = currentYPos + 3;
+
+    // Add logo (smaller for sticker)
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const logoPath = path.default.join(process.cwd(), 'public', 'kairali-logo.png');
+      
+      if (fs.default.existsSync(logoPath)) {
+        const logoData = fs.default.readFileSync(logoPath);
+        const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
+        doc.addImage(logoBase64, 'PNG', 3, yPos, 15, 7.5);
+      }
+    } catch (error) {
+      // Continue without logo
+    }
     
-    yPos += 7;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text('121/1-A1, Karattupalayam, Samathur, Pollachi - 642123', 105, yPos, { align: 'center' });
+    // Company header
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Kairali Ayurvedic Products Pvt Ltd', 52.5, yPos + 2, { align: 'center' });
     
-    yPos += 10;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Packing Slip', 105, yPos, { align: 'center' });
-
-    yPos += 10;
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('To', 15, yPos);
-    doc.text('Order ID', 140, yPos);
-    doc.text(`: ${order.orderId}`, 165, yPos);
-
-    yPos += 7;
+    yPos += 5;
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
-    doc.text('Party Name', 15, yPos);
-    doc.text(`: ${order.customerName}`, 40, yPos);
-    doc.text('Invoice No', 140, yPos);
-    doc.text(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 165, yPos);
-
-    yPos += 7;
-    doc.text('Party Address', 15, yPos);
-    doc.text(':', 40, yPos);
-    const address = order.shippingAddress || order.billingAddress || order.mobile || '';
-    const addressLines = doc.splitTextToSize(address, 85);
-    doc.text(addressLines, 42, yPos);
-
-    doc.text('Invoice Date', 140, yPos);
-    doc.text(`: ${new Date().toLocaleDateString('en-GB')}`, 165, yPos);
-
-    yPos += addressLines.length * 5 + 2;
-    doc.text('Contact No.', 15, yPos);
-    doc.text(`: ${order.mobile}`, 40, yPos);
-    doc.text('No of Boxes', 140, yPos);
-    doc.text(`: ${boxNo}/${totalBoxes}`, 165, yPos);
-
-    yPos += 10;
-
-    doc.setFillColor(26, 188, 156);
-    doc.rect(15, yPos, 180, 8, 'F');
-    doc.setTextColor(255, 255, 255);
+    doc.text('121/1-A1, Karattupalayam, Samathur, Pollachi - 642123', 52.5, yPos + 2, { align: 'center' });
+    
+    yPos += 5;
+    
+    // Packing Slip title
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Box No: ${boxNo}`, 20, yPos + 5.5);
-    doc.setTextColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    doc.rect(35, yPos, 35, 4);
+    doc.text('Packing Slip', 52.5, yPos + 3, { align: 'center' });
 
-    yPos += 8;
+    yPos += 6;
 
-    doc.setFillColor(204, 204, 204);
-    doc.rect(15, yPos, 120, 7, 'F');
-    doc.rect(135, yPos, 30, 7, 'F');
-    doc.rect(165, yPos, 30, 7, 'F');
+    // Order details section with border
+    doc.setLineWidth(0.2);
+    doc.rect(3, yPos, 99, 18);
+    
+    // Vertical divider
+    doc.line(52.5, yPos, 52.5, yPos + 18);
 
+    // Left side
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'bold');
-    doc.text('Product Details', 17, yPos + 5);
-    doc.text('UOM', 150, yPos + 5, { align: 'center' });
-    doc.text('Quantity', 180, yPos + 5, { align: 'center' });
-
-    yPos += 7;
-
+    doc.text('To', 4, yPos + 3);
+    
     doc.setFont('helvetica', 'normal');
-    boxItems.forEach((item) => {
-      const productDetail = `${item.productName} - ${item.sku}`;
-      const lines = doc.splitTextToSize(productDetail, 115);
-      const rowHeight = Math.max(lines.length * 5, 7);
+    doc.text('Party Name', 4, yPos + 6);
+    doc.text(`: ${order.customerName}`, 16, yPos + 6);
+    
+    doc.text('Party Address', 4, yPos + 9);
+    doc.text(':', 16, yPos + 9);
+    const address = order.shippingAddress || order.billingAddress || '';
+    const addressLines = doc.splitTextToSize(address, 32);
+    doc.text(addressLines, 17, yPos + 9);
 
-      doc.rect(15, yPos, 120, rowHeight);
-      doc.rect(135, yPos, 30, rowHeight);
-      doc.rect(165, yPos, 30, rowHeight);
+    const addressHeight = Math.min(addressLines.length * 2.5, 6);
+    doc.text('Contact', 4, yPos + 9 + addressHeight + 1.5);
+    doc.text(`: ${order.mobile}`, 16, yPos + 9 + addressHeight + 1.5);
 
-      doc.text(lines, 17, yPos + 5);
-      doc.text(item.package, 150, yPos + rowHeight / 2 + 1.5, { align: 'center' });
-      doc.text(item.packingQty.toString(), 180, yPos + rowHeight / 2 + 1.5, { align: 'center' });
+    // Right side
+    doc.setFont('helvetica', 'bold');
+    doc.text('Order ID', 54, yPos + 3);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`: ${order.orderId}`, 65, yPos + 3);
+    
+    doc.text('Invoice No', 54, yPos + 6);
+    doc.text(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 65, yPos + 6);
+    
+    doc.text('Invoice Date', 54, yPos + 9);
+    doc.text(`: ${new Date().toLocaleDateString('en-IN')}`, 65, yPos + 9);
+    
+    doc.text('No of Boxes', 54, yPos + 12);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text(`: ${boxNo}/${totalBoxes}`, 65, yPos + 12);
 
-      yPos += rowHeight;
+    yPos += 20;
+
+    // Table headers
+    doc.setFillColor(220, 220, 220);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    
+    const colWidths = [12, 62, 12, 12];
+    const colX = [3, 15, 77, 89];
+    
+    colWidths.forEach((width, i) => {
+      doc.rect(colX[i], yPos, width, 4, 'FD');
     });
+    
+    doc.text('Box No', colX[0] + colWidths[0]/2, yPos + 3, { align: 'center' });
+    doc.text('Product Details', colX[1] + 1, yPos + 3);
+    doc.text('UOM', colX[2] + colWidths[2]/2, yPos + 3, { align: 'center' });
+    doc.text('Qty', colX[3] + colWidths[3]/2, yPos + 3, { align: 'center' });
+
+    yPos += 4;
+
+    // Single row with all products for this box
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.5);
+    
+    const productLines = [];
+    const uomLines = [];
+    const qtyLines = [];
+    
+    boxItems.forEach((item) => {
+      productLines.push(`${item.productName} - ${item.sku}`);
+      uomLines.push(item.package || 'N/A');
+      qtyLines.push(item.packingQty.toString());
+    });
+
+    const rowHeight = Math.max(boxItems.length * 4.5, 6);
+
+    // Draw cell borders
+    colWidths.forEach((width, i) => {
+      doc.rect(colX[i], yPos, width, rowHeight);
+    });
+
+    // Box Number
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text(boxNo.toString(), colX[0] + colWidths[0]/2, yPos + rowHeight/2 + 1, { align: 'center' });
+    
+    // Product details
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.5);
+    let lineYPos = yPos + 2.5;
+    productLines.forEach((line, index) => {
+      const wrappedLines = doc.splitTextToSize(line, colWidths[1] - 2);
+      doc.text(wrappedLines, colX[1] + 1, lineYPos);
+      lineYPos += wrappedLines.length * 2.5;
+      if (index < productLines.length - 1) {
+        lineYPos += 2;
+      }
+    });
+    
+    // UOM
+    lineYPos = yPos + 2.5;
+    uomLines.forEach((uom) => {
+      doc.text(uom, colX[2] + colWidths[2]/2, lineYPos, { align: 'center' });
+      lineYPos += 4.5;
+    });
+    
+    // Quantity
+    doc.setFont('helvetica', 'bold');
+    lineYPos = yPos + 2.5;
+    qtyLines.forEach((qty) => {
+      doc.text(qty, colX[3] + colWidths[3]/2, lineYPos, { align: 'center' });
+      lineYPos += 4.5;
+    });
+
+    currentYPos += stickerHeight;
+    stickersOnPage++;
   });
 
   return doc;
