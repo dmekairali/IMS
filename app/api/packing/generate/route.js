@@ -1,6 +1,9 @@
 // app/api/packing/generate/route.js
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(request) {
   console.log('🔍 Packing API called');
   
