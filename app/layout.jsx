@@ -1,32 +1,20 @@
 import './globals.css';
+import BottomNav from '@/components/layout/BottomNav';
 
 export const metadata = {
-  title: 'Ayur Inventory - Dispatch Management',
-  description: 'Mobile-first inventory dispatch system for Ayurvedic medicines',
-  manifest: '/manifest.json',
-  themeColor: '#10b981',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'AyurInv'
-  }
+  title: 'Inventory Management - Kairali',
+  description: 'Ayurvedic Medicine Inventory Management System',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <head>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-      </head>
-      <body>{children}</body>
+      <body className="bg-gray-50">
+        <main className="min-h-screen pb-16">
+          {children}
+        </main>
+        <BottomNav />
+      </body>
     </html>
   );
 }
