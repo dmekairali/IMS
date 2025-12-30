@@ -144,7 +144,7 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   };
   
   // Add logo
-  const logoY = 5;
+  const logoY = 3;
   const hasLogo = await addLogoToPDF(doc, 3, logoY, 15, 7.5);
   const startY = hasLogo ? 5 : 8;
   
@@ -153,63 +153,82 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   doc.setFont('helvetica', 'bold');
   doc.text('Kairali Ayurvedic Products Pvt Ltd', 52.5, startY + 3, { align: 'center' });
   
-  doc.setFontSize(7);
+  doc.setFontSize(6);
   doc.setFont('helvetica', 'normal');
-  doc.text('121/1-A1, Karattupalayam, Samathur, Pollachi - 642123', 52.5, startY + 8, { align: 'center' });
+  doc.text('121/1-A1, Karattupalayam, Samathur, Pollachi - 642123', 52.5, startY + 7, { align: 'center' });
   
   // Packing List title with border
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
-  doc.rect(32, startY + 11, 41, 5);
-  doc.text('Packing List', 52.5, startY + 14.5, { align: 'center' });
+  doc.rect(32, startY + 10, 41, 5);
+  doc.text('Packing List', 52.5, startY + 13.5, { align: 'center' });
 
   // Order details section with border
-  let yPos = startY + 19;
+  let yPos = startY + 18;
   doc.setLineWidth(0.2);
-  doc.rect(3, yPos, 99, 22); // Outer border
+  doc.rect(3, yPos, 99, 26); // Outer border - increased height
   
   // Vertical divider
-  doc.line(52.5, yPos, 52.5, yPos + 22);
+  doc.line(52.5, yPos, 52.5, yPos + 26);
 
   // Left side
-  doc.setFontSize(7);
+  doc.setFontSize(6);
   doc.setFont('helvetica', 'bold');
   doc.text('To', 4, yPos + 3);
   
   doc.setFont('helvetica', 'normal');
+  // Party Name
+  doc.setFont('helvetica', 'bold');
   doc.text('Party Name', 4, yPos + 7);
-  doc.text(`: ${order.customerName || 'N/A'}`, 18, yPos + 7);
+  doc.setFont('helvetica', 'normal');
+  const partyName = doc.splitTextToSize(`: ${order.customerName || 'N/A'}`, 45);
+  doc.text(partyName, 4, yPos + 10);
   
-  doc.text('Party Address', 4, yPos + 11);
-  doc.text(':', 18, yPos + 11);
+  // Calculate dynamic spacing based on party name lines
+  const partyNameHeight = partyName.length * 2.5;
+  
+  // Party Address
+  doc.setFont('helvetica', 'bold');
+  doc.text('Party Address', 4, yPos + 10 + partyNameHeight + 1);
+  doc.setFont('helvetica', 'normal');
   const address = order.shippingAddress || order.billingAddress || 'N/A';
-  const addressLines = doc.splitTextToSize(address, 30);
-  doc.text(addressLines, 19, yPos + 11);
+  const addressLines = doc.splitTextToSize(`: ${address}`, 45);
+  doc.text(addressLines, 4, yPos + 10 + partyNameHeight + 4);
   
-  const addressHeight = Math.min(addressLines.length * 3, 8);
-  doc.text('Contact No.', 4, yPos + 11 + addressHeight + 2);
-  doc.text(`: ${order.mobile || 'N/A'}`, 18, yPos + 11 + addressHeight + 2);
+  const addressHeight = addressLines.length * 2.5;
+  
+  // Contact
+  doc.setFont('helvetica', 'bold');
+  doc.text('Contact No.', 4, yPos + 10 + partyNameHeight + addressHeight + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${order.mobile || 'N/A'}`, 4, yPos + 10 + partyNameHeight + addressHeight + 8);
 
   // Right side
   doc.setFont('helvetica', 'bold');
   doc.text('Order ID', 54, yPos + 3);
   doc.setFont('helvetica', 'normal');
-  doc.text(`: ${order.orderId || 'N/A'}`, 66, yPos + 3);
+  const orderId = doc.splitTextToSize(`: ${order.orderId || 'N/A'}`, 45);
+  doc.text(orderId, 54, yPos + 6);
   
-  doc.text('Invoice No', 54, yPos + 7);
-  doc.text(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 66, yPos + 7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Invoice No', 54, yPos + 10);
+  doc.setFont('helvetica', 'normal');
+  const invoiceNo = doc.splitTextToSize(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 45);
+  doc.text(invoiceNo, 54, yPos + 13);
   
-  doc.text('Invoice Date', 54, yPos + 11);
-  doc.text(`: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 66, yPos + 11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Invoice Date', 54, yPos + 17);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 54, yPos + 20);
   
   const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
-  doc.text('No of Boxes', 54, yPos + 15);
   doc.setFont('helvetica', 'bold');
-  doc.text(`: ${totalBoxes}`, 66, yPos + 15);
+  doc.text('No of Boxes', 54, yPos + 23);
+  doc.text(`: ${totalBoxes}`, 75, yPos + 23);
 
-  yPos = yPos + 25;
+  yPos = yPos + 29;
 
   // Group items by box number
   const itemsByBox = {};
@@ -223,54 +242,54 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   // Table headers
   doc.setFillColor(220, 220, 220);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
+  doc.setFontSize(6);
   
   // Column widths: Box No | Product Details | UOM | Quantity
-  const colWidths = [12, 62, 12, 12];
-  const colX = [3, 15, 77, 89];
+  const colWidths = [10, 66, 12, 12];
+  const colX = [3, 13, 79, 91];
   
   // Draw header cells
   colWidths.forEach((width, i) => {
     doc.rect(colX[i], yPos, width, 5, 'FD');
   });
   
-  doc.text('Box No', colX[0] + colWidths[0]/2, yPos + 3.5, { align: 'center' });
+  doc.text('Box', colX[0] + colWidths[0]/2, yPos + 3.5, { align: 'center' });
   doc.text('Product Details', colX[1] + 1, yPos + 3.5);
   doc.text('UOM', colX[2] + colWidths[2]/2, yPos + 3.5, { align: 'center' });
-  doc.text('Quantity', colX[3] + colWidths[3]/2, yPos + 3.5, { align: 'center' });
+  doc.text('Qty', colX[3] + colWidths[3]/2, yPos + 3.5, { align: 'center' });
 
   yPos += 5;
 
   // Table rows - one row per box
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6);
+  doc.setFontSize(5.5);
   
   const sortedBoxNos = Object.keys(itemsByBox).sort((a, b) => parseInt(a) - parseInt(b));
   
   sortedBoxNos.forEach((boxNo) => {
     const boxItems = itemsByBox[boxNo];
     
-    if (yPos > 140) {
+    if (yPos > 138) {
       doc.addPage();
       yPos = 10;
       
       // Redraw headers
       doc.setFillColor(220, 220, 220);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
+      doc.setFontSize(6);
       
       colWidths.forEach((width, i) => {
         doc.rect(colX[i], yPos, width, 5, 'FD');
       });
       
-      doc.text('Box No', colX[0] + colWidths[0]/2, yPos + 3.5, { align: 'center' });
+      doc.text('Box', colX[0] + colWidths[0]/2, yPos + 3.5, { align: 'center' });
       doc.text('Product Details', colX[1] + 1, yPos + 3.5);
       doc.text('UOM', colX[2] + colWidths[2]/2, yPos + 3.5, { align: 'center' });
-      doc.text('Quantity', colX[3] + colWidths[3]/2, yPos + 3.5, { align: 'center' });
+      doc.text('Qty', colX[3] + colWidths[3]/2, yPos + 3.5, { align: 'center' });
       
       yPos += 5;
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
+      doc.setFontSize(5.5);
     }
 
     const productLines = [];
@@ -278,12 +297,17 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      productLines.push(`${item.productName} - ${item.sku}`);
+      // Wrap long product names properly
+      const productText = `${item.productName} - ${item.sku}`;
+      const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
+      productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
       qtyLines.push(item.packingQty.toString());
     });
 
-    const rowHeight = Math.max(boxItems.length * 5, 6);
+    // Calculate total lines for all products
+    const totalLines = productLines.reduce((sum, lines) => sum + lines.length, 0);
+    const rowHeight = Math.max(totalLines * 2.5 + (productLines.length - 1) * 2, 8);
 
     // Draw cell borders
     colWidths.forEach((width, i) => {
@@ -292,35 +316,44 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
 
     // Box Number
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.text(boxNo.toString(), colX[0] + colWidths[0]/2, yPos + rowHeight/2 + 1, { align: 'center' });
     
-    // Product details
+    // Product details - each product with proper wrapping
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6);
-    let lineYPos = yPos + 3;
-    productLines.forEach((line, index) => {
-      const wrappedLines = doc.splitTextToSize(line, colWidths[1] - 2);
+    doc.setFontSize(5.5);
+    let lineYPos = yPos + 2.5;
+    productLines.forEach((wrappedLines, index) => {
       doc.text(wrappedLines, colX[1] + 1, lineYPos);
-      lineYPos += wrappedLines.length * 3;
+      lineYPos += wrappedLines.length * 2.5;
       if (index < productLines.length - 1) {
+        lineYPos += 2; // Space between products
+      }
+    });
+    
+    // UOM - aligned with each product
+    lineYPos = yPos + 2.5;
+    uomLines.forEach((uom, index) => {
+      const productLineCount = productLines[index].length;
+      const uomYPos = lineYPos + (productLineCount * 2.5) / 2;
+      doc.text(uom, colX[2] + colWidths[2]/2, uomYPos, { align: 'center' });
+      lineYPos += productLineCount * 2.5;
+      if (index < uomLines.length - 1) {
         lineYPos += 2;
       }
     });
     
-    // UOM
-    lineYPos = yPos + 3;
-    uomLines.forEach((uom) => {
-      doc.text(uom, colX[2] + colWidths[2]/2, lineYPos, { align: 'center' });
-      lineYPos += 5;
-    });
-    
-    // Quantity
+    // Quantity - aligned with each product, bold
     doc.setFont('helvetica', 'bold');
-    lineYPos = yPos + 3;
-    qtyLines.forEach((qty) => {
-      doc.text(qty, colX[3] + colWidths[3]/2, lineYPos, { align: 'center' });
-      lineYPos += 5;
+    lineYPos = yPos + 2.5;
+    qtyLines.forEach((qty, index) => {
+      const productLineCount = productLines[index].length;
+      const qtyYPos = lineYPos + (productLineCount * 2.5) / 2;
+      doc.text(qty, colX[3] + colWidths[3]/2, qtyYPos, { align: 'center' });
+      lineYPos += productLineCount * 2.5;
+      if (index < qtyLines.length - 1) {
+        lineYPos += 2;
+      }
     });
     doc.setFont('helvetica', 'normal');
 
@@ -382,111 +415,132 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
       doc.setLineDash([]); // Reset to solid line
     }
 
-    let yPos = currentYPos + 3;
+    let yPos = currentYPos + 2;
 
     // Add logo (smaller for sticker)
-    await addLogoToPDF(doc, 3, yPos, 15, 7.5);
+    await addLogoToPDF(doc, 3, yPos, 12, 6);
     
     // Company header
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.text('Kairali Ayurvedic Products Pvt Ltd', 52.5, yPos + 2, { align: 'center' });
     
-    yPos += 5;
-    doc.setFontSize(6);
+    yPos += 4.5;
+    doc.setFontSize(5.5);
     doc.setFont('helvetica', 'normal');
     doc.text('121/1-A1, Karattupalayam, Samathur, Pollachi - 642123', 52.5, yPos + 2, { align: 'center' });
     
-    yPos += 5;
+    yPos += 4.5;
     
     // Packing Slip title
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setLineWidth(0.2);
     doc.rect(35, yPos, 35, 4);
-    doc.text('Packing Slip', 52.5, yPos + 3, { align: 'center' });
+    doc.text('Packing Slip', 52.5, yPos + 2.8, { align: 'center' });
 
-    yPos += 6;
+    yPos += 5.5;
 
     // Order details section with border
     doc.setLineWidth(0.2);
-    doc.rect(3, yPos, 99, 18);
+    doc.rect(3, yPos, 99, 20); // Increased height
     
     // Vertical divider
-    doc.line(52.5, yPos, 52.5, yPos + 18);
+    doc.line(52.5, yPos, 52.5, yPos + 20);
 
     // Left side
-    doc.setFontSize(6);
+    doc.setFontSize(5.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('To', 4, yPos + 3);
+    doc.text('To', 4, yPos + 2.5);
     
+    // Party Name
+    doc.text('Party Name', 4, yPos + 5.5);
     doc.setFont('helvetica', 'normal');
-    doc.text('Party Name', 4, yPos + 6);
-    doc.text(`: ${order.customerName}`, 16, yPos + 6);
+    const partyName = doc.splitTextToSize(`: ${order.customerName}`, 45);
+    doc.text(partyName, 4, yPos + 8);
     
-    doc.text('Party Address', 4, yPos + 9);
-    doc.text(':', 16, yPos + 9);
+    const partyNameHeight = partyName.length * 2;
+    
+    // Party Address
+    doc.setFont('helvetica', 'bold');
+    doc.text('Party Address', 4, yPos + 8 + partyNameHeight + 1);
+    doc.setFont('helvetica', 'normal');
     const address = order.shippingAddress || order.billingAddress || '';
-    const addressLines = doc.splitTextToSize(address, 32);
-    doc.text(addressLines, 17, yPos + 9);
+    const addressLines = doc.splitTextToSize(`: ${address}`, 45);
+    doc.text(addressLines, 4, yPos + 8 + partyNameHeight + 3.5);
 
-    const addressHeight = Math.min(addressLines.length * 2.5, 6);
-    doc.text('Contact', 4, yPos + 9 + addressHeight + 1.5);
-    doc.text(`: ${order.mobile}`, 16, yPos + 9 + addressHeight + 1.5);
+    const addressHeight = addressLines.length * 2;
+    
+    // Contact
+    doc.setFont('helvetica', 'bold');
+    doc.text('Contact', 4, yPos + 8 + partyNameHeight + addressHeight + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`: ${order.mobile}`, 4, yPos + 8 + partyNameHeight + addressHeight + 7.5);
 
     // Right side
     doc.setFont('helvetica', 'bold');
-    doc.text('Order ID', 54, yPos + 3);
+    doc.text('Order ID', 54, yPos + 2.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`: ${order.orderId}`, 65, yPos + 3);
+    const orderId = doc.splitTextToSize(`: ${order.orderId}`, 45);
+    doc.text(orderId, 54, yPos + 5);
     
-    doc.text('Invoice No', 54, yPos + 6);
-    doc.text(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 65, yPos + 6);
-    
-    doc.text('Invoice Date', 54, yPos + 9);
-    doc.text(`: ${new Date().toLocaleDateString('en-IN')}`, 65, yPos + 9);
-    
-    doc.text('No of Boxes', 54, yPos + 12);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.text(`: ${boxNo}/${totalBoxes}`, 65, yPos + 12);
+    doc.text('Invoice No', 54, yPos + 8.5);
+    doc.setFont('helvetica', 'normal');
+    const invoiceNo = doc.splitTextToSize(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 45);
+    doc.text(invoiceNo, 54, yPos + 11);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('Invoice Date', 54, yPos + 14.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`: ${new Date().toLocaleDateString('en-IN')}`, 54, yPos + 17);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('No of Boxes', 75, yPos + 14.5);
+    doc.setFontSize(6.5);
+    doc.text(`: ${boxNo}/${totalBoxes}`, 75, yPos + 17);
 
-    yPos += 20;
+    yPos += 22;
 
     // Table headers
     doc.setFillColor(220, 220, 220);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6);
+    doc.setFontSize(5.5);
     
-    const colWidths = [12, 62, 12, 12];
-    const colX = [3, 15, 77, 89];
+    const colWidths = [10, 66, 12, 12];
+    const colX = [3, 13, 79, 91];
     
     colWidths.forEach((width, i) => {
       doc.rect(colX[i], yPos, width, 4, 'FD');
     });
     
-    doc.text('Box No', colX[0] + colWidths[0]/2, yPos + 3, { align: 'center' });
-    doc.text('Product Details', colX[1] + 1, yPos + 3);
-    doc.text('UOM', colX[2] + colWidths[2]/2, yPos + 3, { align: 'center' });
-    doc.text('Qty', colX[3] + colWidths[3]/2, yPos + 3, { align: 'center' });
+    doc.text('Box', colX[0] + colWidths[0]/2, yPos + 2.8, { align: 'center' });
+    doc.text('Product Details', colX[1] + 1, yPos + 2.8);
+    doc.text('UOM', colX[2] + colWidths[2]/2, yPos + 2.8, { align: 'center' });
+    doc.text('Qty', colX[3] + colWidths[3]/2, yPos + 2.8, { align: 'center' });
 
     yPos += 4;
 
     // Single row with all products for this box
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.5);
+    doc.setFontSize(5);
     
     const productLines = [];
     const uomLines = [];
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      productLines.push(`${item.productName} - ${item.sku}`);
+      // Wrap long product names
+      const productText = `${item.productName} - ${item.sku}`;
+      const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
+      productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
       qtyLines.push(item.packingQty.toString());
     });
 
-    const rowHeight = Math.max(boxItems.length * 4.5, 6);
+    // Calculate total lines
+    const totalLines = productLines.reduce((sum, lines) => sum + lines.length, 0);
+    const rowHeight = Math.max(totalLines * 2.2 + (productLines.length - 1) * 1.5, 6);
 
     // Draw cell borders
     colWidths.forEach((width, i) => {
@@ -495,35 +549,44 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
 
     // Box Number
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     doc.text(boxNo.toString(), colX[0] + colWidths[0]/2, yPos + rowHeight/2 + 1, { align: 'center' });
     
-    // Product details
+    // Product details - properly wrapped
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.5);
-    let lineYPos = yPos + 2.5;
-    productLines.forEach((line, index) => {
-      const wrappedLines = doc.splitTextToSize(line, colWidths[1] - 2);
+    doc.setFontSize(5);
+    let lineYPos = yPos + 2.2;
+    productLines.forEach((wrappedLines, index) => {
       doc.text(wrappedLines, colX[1] + 1, lineYPos);
-      lineYPos += wrappedLines.length * 2.5;
+      lineYPos += wrappedLines.length * 2.2;
       if (index < productLines.length - 1) {
-        lineYPos += 2;
+        lineYPos += 1.5; // Space between products
       }
     });
     
-    // UOM
-    lineYPos = yPos + 2.5;
-    uomLines.forEach((uom) => {
-      doc.text(uom, colX[2] + colWidths[2]/2, lineYPos, { align: 'center' });
-      lineYPos += 4.5;
+    // UOM - aligned with each product
+    lineYPos = yPos + 2.2;
+    uomLines.forEach((uom, index) => {
+      const productLineCount = productLines[index].length;
+      const uomYPos = lineYPos + (productLineCount * 2.2) / 2;
+      doc.text(uom, colX[2] + colWidths[2]/2, uomYPos, { align: 'center' });
+      lineYPos += productLineCount * 2.2;
+      if (index < uomLines.length - 1) {
+        lineYPos += 1.5;
+      }
     });
     
-    // Quantity
+    // Quantity - aligned with each product
     doc.setFont('helvetica', 'bold');
-    lineYPos = yPos + 2.5;
-    qtyLines.forEach((qty) => {
-      doc.text(qty, colX[3] + colWidths[3]/2, lineYPos, { align: 'center' });
-      lineYPos += 4.5;
+    lineYPos = yPos + 2.2;
+    qtyLines.forEach((qty, index) => {
+      const productLineCount = productLines[index].length;
+      const qtyYPos = lineYPos + (productLineCount * 2.2) / 2;
+      doc.text(qty, colX[3] + colWidths[3]/2, qtyYPos, { align: 'center' });
+      lineYPos += productLineCount * 2.2;
+      if (index < qtyLines.length - 1) {
+        lineYPos += 1.5;
+      }
     });
 
     currentYPos += stickerHeight;
