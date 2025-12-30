@@ -1,4 +1,4 @@
-// app/api/orders/list/route.js - New implementation
+// app/api/orders/list/route.js - Include packing status
 import { getSheets } from '@/lib/googleSheets';
 
 export async function GET(request) {
@@ -36,6 +36,10 @@ export async function GET(request) {
     const invoiceAmountCol = getColumnIndex('Invoice Amount');
     const dispatchedCol = getColumnIndex('Dispatched');
     const dispatchStatusCol = getColumnIndex('Dispatch Status');
+    const billingAddressCol = getColumnIndex('Billing Address');
+    const shippingAddressCol = getColumnIndex('Shipping Address');
+    const packingListCol = getColumnIndex('Packing List');
+    const stickerCol = getColumnIndex('Sticker');
 
     // 3. Get all SKU details from All Form Data
     const formDataResponse = await sheets.spreadsheets.values.get({
@@ -67,11 +71,6 @@ export async function GET(request) {
       const orderId = row[orderIdCol];
       const dispatched = row[dispatchedCol];
 
-      // Skip if already dispatched or in OID Log
-      if (dispatched === 'Yes' || dispatchedOIDs.has(orderId)) {
-        continue;
-      }
-
       // Get SKU items for this order
       const orderItems = formDataRows
         .slice(1)
@@ -88,6 +87,9 @@ export async function GET(request) {
       if (orderItems.length === 0) continue; // Skip orders without items
 
       const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantityOrdered, 0);
+      const packingListLink = row[packingListCol] || '';
+      const stickerLink = row[stickerCol] || '';
+      const hasPacking = packingListLink !== '' && packingListLink !== undefined;
 
       orders.push({
         orderId: orderId,
@@ -96,6 +98,13 @@ export async function GET(request) {
         mobile: row[mobileCol] || '',
         invoiceAmount: parseFloat(row[invoiceAmountCol] || '0'),
         status: row[dispatchStatusCol] || 'Pending',
+        dispatched: dispatched === 'Yes',
+        dispatchedInOIDLog: dispatchedOIDs.has(orderId),
+        billingAddress: row[billingAddressCol] || '',
+        shippingAddress: row[shippingAddressCol] || '',
+        packingListLink: packingListLink,
+        stickerLink: stickerLink,
+        hasPacking: hasPacking,
         items: orderItems,
         totalQuantity: totalQuantity,
         rowIndex: i + 1 // For updating later
