@@ -1,0 +1,70 @@
+'use client';
+import { useState, useEffect } from 'react';
+import PackingForm from '@/components/packing/PackingForm';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorMessage from '@/components/common/ErrorMessage';
+
+export default function PackingPage() {
+  const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch orders from DispatchData
+      const ordersResponse = await fetch('/api/orders/list');
+      if (!ordersResponse.ok) throw new Error('Failed to fetch orders');
+      const ordersData = await ordersResponse.json();
+
+      // Fetch products from All Form Data
+      const productsResponse = await fetch('/api/products/list');
+      if (!productsResponse.ok) throw new Error('Failed to fetch products');
+      const productsData = await productsResponse.json();
+
+      setOrders(ordersData.orders || []);
+      setProducts(productsData.products || []);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <ErrorMessage message={error} onRetry={fetchData} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="max-w-4xl mx-auto p-4">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Packing Management</h1>
+          <p className="text-gray-600">Create packing lists and stickers for orders</p>
+        </div>
+
+        <PackingForm orders={orders} products={products} onRefresh={fetchData} />
+      </div>
+    </div>
+  );
+}
