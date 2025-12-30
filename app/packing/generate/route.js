@@ -1,8 +1,5 @@
 // app/api/packing/generate/route.js
 import { NextResponse } from 'next/server';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import { getOrCreateOrderFolder, uploadPDFToDrive, updateDispatchDataWithLinks } from '@/lib/googleDrive';
 
 export async function POST(request) {
   try {
@@ -15,11 +12,16 @@ export async function POST(request) {
       );
     }
 
+    // Dynamic imports for server-side only modules
+    const jsPDF = (await import('jspdf')).default;
+    await import('jspdf-autotable');
+    const { getOrCreateOrderFolder, uploadPDFToDrive, updateDispatchDataWithLinks } = await import('@/lib/googleDrive');
+
     // Create folder for this order
     const folderId = await getOrCreateOrderFolder(order.orderId);
 
     // Generate Packing List PDF
-    const packingListPDF = generatePackingListPDF(order, packingItems);
+    const packingListPDF = generatePackingListPDF(order, packingItems, jsPDF);
     const packingListBuffer = Buffer.from(packingListPDF.output('arraybuffer'));
     
     const packingListFile = await uploadPDFToDrive(
@@ -29,7 +31,7 @@ export async function POST(request) {
     );
 
     // Generate Stickers PDF
-    const stickersPDF = generateStickersPDF(order, packingItems);
+    const stickersPDF = generateStickersPDF(order, packingItems, jsPDF);
     const stickersBuffer = Buffer.from(stickersPDF.output('arraybuffer'));
     
     const stickersFile = await uploadPDFToDrive(
@@ -65,7 +67,7 @@ export async function POST(request) {
   }
 }
 
-function generatePackingListPDF(order, packingItems) {
+function generatePackingListPDF(order, packingItems, jsPDF) {
   const doc = new jsPDF();
   
   // Company header
@@ -179,7 +181,7 @@ function generatePackingListPDF(order, packingItems) {
   return doc;
 }
 
-function generateStickersPDF(order, packingItems) {
+function generateStickersPDF(order, packingItems, jsPDF) {
   const doc = new jsPDF();
   let yPos = 15;
 
