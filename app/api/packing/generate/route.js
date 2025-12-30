@@ -108,7 +108,7 @@ export async function POST(request) {
   }
 }
 
-async function addLogoToPDF(doc) {
+async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -117,7 +117,7 @@ async function addLogoToPDF(doc) {
     if (fs.default.existsSync(logoPath)) {
       const logoData = fs.default.readFileSync(logoPath);
       const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
-      doc.addImage(logoBase64, 'PNG', 15, 10, 30, 15); // x, y, width, height
+      doc.addImage(logoBase64, 'PNG', x, y, width, height);
       return true;
     }
   } catch (error) {
@@ -144,7 +144,8 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   };
   
   // Add logo
-  const hasLogo = await addLogoToPDF(doc);
+  const logoY = 5;
+  const hasLogo = await addLogoToPDF(doc, 3, logoY, 15, 7.5);
   const startY = hasLogo ? 5 : 8;
   
   // Company header
@@ -362,7 +363,7 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
   const stickerHeight = 74; // Half of A6 height for 2 stickers per page
   let stickersOnPage = 0;
 
-  sortedBoxNos.forEach((boxNo, boxIndex) => {
+  for (const [boxIndex, boxNo] of sortedBoxNos.entries()) {
     const boxItems = itemsByBox[boxNo];
 
     // Check if we need a new page (after every 2 stickers)
@@ -384,19 +385,7 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     let yPos = currentYPos + 3;
 
     // Add logo (smaller for sticker)
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const logoPath = path.default.join(process.cwd(), 'public', 'kairali-logo.png');
-      
-      if (fs.default.existsSync(logoPath)) {
-        const logoData = fs.default.readFileSync(logoPath);
-        const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
-        doc.addImage(logoBase64, 'PNG', 3, yPos, 15, 7.5);
-      }
-    } catch (error) {
-      // Continue without logo
-    }
+    await addLogoToPDF(doc, 3, yPos, 15, 7.5);
     
     // Company header
     doc.setFontSize(9);
@@ -539,7 +528,7 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
 
     currentYPos += stickerHeight;
     stickersOnPage++;
-  });
+  }
 
   return doc;
 }
