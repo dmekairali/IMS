@@ -108,6 +108,14 @@ export async function POST(request) {
   }
 }
 
+// Helper function to extract just the product name from full product string
+function extractProductName(fullProductName) {
+  // Product format: "Name - SKU - details - price - etc"
+  // We want just the name part before first " - "
+  const parts = fullProductName.split(' - ');
+  return parts[0].trim();
+}
+
 async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
   try {
     const fs = await import('fs');
@@ -168,67 +176,57 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   // Order details section with border
   let yPos = startY + 18;
   doc.setLineWidth(0.2);
-  doc.rect(3, yPos, 99, 26); // Outer border - increased height
+  doc.rect(3, yPos, 99, 28); // Outer border
   
   // Vertical divider
-  doc.line(52.5, yPos, 52.5, yPos + 26);
+  doc.line(52.5, yPos, 52.5, yPos + 28);
 
   // Left side
   doc.setFontSize(6);
   doc.setFont('helvetica', 'bold');
   doc.text('To', 4, yPos + 3);
   
+  // Party Name - inline
+  doc.text('Party Name : ', 4, yPos + 7);
   doc.setFont('helvetica', 'normal');
-  // Party Name
-  doc.setFont('helvetica', 'bold');
-  doc.text('Party Name', 4, yPos + 7);
-  doc.setFont('helvetica', 'normal');
-  const partyName = doc.splitTextToSize(`: ${order.customerName || 'N/A'}`, 45);
-  doc.text(partyName, 4, yPos + 10);
+  doc.text(order.customerName || 'N/A', 20, yPos + 7);
   
-  // Calculate dynamic spacing based on party name lines
-  const partyNameHeight = partyName.length * 2.5;
-  
-  // Party Address
+  // Party Address + Contact merged area (wider)
   doc.setFont('helvetica', 'bold');
-  doc.text('Party Address', 4, yPos + 10 + partyNameHeight + 1);
+  doc.text('Party Address :', 4, yPos + 11);
   doc.setFont('helvetica', 'normal');
+  
+  // Combine address and contact with line break
   const address = order.shippingAddress || order.billingAddress || 'N/A';
-  const addressLines = doc.splitTextToSize(`: ${address}`, 45);
-  doc.text(addressLines, 4, yPos + 10 + partyNameHeight + 4);
+  const mobile = order.mobile || 'N/A';
+  const fullAddress = `${address}\nContact No. : ${mobile}`;
   
-  const addressHeight = addressLines.length * 2.5;
-  
-  // Contact
-  doc.setFont('helvetica', 'bold');
-  doc.text('Contact No.', 4, yPos + 10 + partyNameHeight + addressHeight + 5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`: ${order.mobile || 'N/A'}`, 4, yPos + 10 + partyNameHeight + addressHeight + 8);
+  // Wider text area for address (use full left section width)
+  const addressLines = doc.splitTextToSize(fullAddress, 46);
+  doc.text(addressLines, 4, yPos + 14);
 
-  // Right side
+  // Right side - all inline
   doc.setFont('helvetica', 'bold');
-  doc.text('Order ID', 54, yPos + 3);
+  doc.text('Order ID : ', 54, yPos + 3);
   doc.setFont('helvetica', 'normal');
-  const orderId = doc.splitTextToSize(`: ${order.orderId || 'N/A'}`, 45);
-  doc.text(orderId, 54, yPos + 6);
+  doc.text(order.orderId || 'N/A', 68, yPos + 3);
   
   doc.setFont('helvetica', 'bold');
-  doc.text('Invoice No', 54, yPos + 10);
+  doc.text('Invoice No : ', 54, yPos + 7);
   doc.setFont('helvetica', 'normal');
-  const invoiceNo = doc.splitTextToSize(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 45);
-  doc.text(invoiceNo, 54, yPos + 13);
+  doc.text(order.invoiceNo || order.orderId || 'N/A', 72, yPos + 7);
   
   doc.setFont('helvetica', 'bold');
-  doc.text('Invoice Date', 54, yPos + 17);
+  doc.text('Invoice Date : ', 54, yPos + 11);
   doc.setFont('helvetica', 'normal');
-  doc.text(`: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 54, yPos + 20);
+  doc.text(new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), 75, yPos + 11);
   
   const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
   doc.setFont('helvetica', 'bold');
-  doc.text('No of Boxes', 54, yPos + 23);
-  doc.text(`: ${totalBoxes}`, 75, yPos + 23);
+  doc.text('No of Boxes : ', 54, yPos + 15);
+  doc.text(totalBoxes.toString(), 77, yPos + 15);
 
-  yPos = yPos + 29;
+  yPos = yPos + 31;
 
   // Group items by box number
   const itemsByBox = {};
@@ -297,8 +295,10 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      // Wrap long product names properly
-      const productText = `${item.productName} - ${item.sku}`;
+      // Extract just the product name (before first " - ")
+      const productName = extractProductName(item.productName);
+      // Add SKU on next line
+      const productText = `${productName}\n${item.sku}`;
       const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
@@ -443,64 +443,56 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
 
     // Order details section with border
     doc.setLineWidth(0.2);
-    doc.rect(3, yPos, 99, 20); // Increased height
+    doc.rect(3, yPos, 99, 22); // Increased height
     
     // Vertical divider
-    doc.line(52.5, yPos, 52.5, yPos + 20);
+    doc.line(52.5, yPos, 52.5, yPos + 22);
 
     // Left side
     doc.setFontSize(5.5);
     doc.setFont('helvetica', 'bold');
     doc.text('To', 4, yPos + 2.5);
     
-    // Party Name
-    doc.text('Party Name', 4, yPos + 5.5);
+    // Party Name - inline
+    doc.text('Party Name : ', 4, yPos + 6);
     doc.setFont('helvetica', 'normal');
-    const partyName = doc.splitTextToSize(`: ${order.customerName}`, 45);
-    doc.text(partyName, 4, yPos + 8);
+    doc.text(order.customerName, 20, yPos + 6);
     
-    const partyNameHeight = partyName.length * 2;
-    
-    // Party Address
+    // Party Address + Contact merged area
     doc.setFont('helvetica', 'bold');
-    doc.text('Party Address', 4, yPos + 8 + partyNameHeight + 1);
+    doc.text('Party Address :', 4, yPos + 10);
     doc.setFont('helvetica', 'normal');
+    
+    // Combine address and contact
     const address = order.shippingAddress || order.billingAddress || '';
-    const addressLines = doc.splitTextToSize(`: ${address}`, 45);
-    doc.text(addressLines, 4, yPos + 8 + partyNameHeight + 3.5);
+    const mobile = order.mobile;
+    const fullAddress = `${address}\nContact : ${mobile}`;
+    
+    const addressLines = doc.splitTextToSize(fullAddress, 46);
+    doc.text(addressLines, 4, yPos + 13);
 
-    const addressHeight = addressLines.length * 2;
-    
-    // Contact
+    // Right side - all inline
     doc.setFont('helvetica', 'bold');
-    doc.text('Contact', 4, yPos + 8 + partyNameHeight + addressHeight + 5);
+    doc.text('Order ID : ', 54, yPos + 2.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`: ${order.mobile}`, 4, yPos + 8 + partyNameHeight + addressHeight + 7.5);
+    doc.text(order.orderId, 66, yPos + 2.5);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('Invoice No : ', 54, yPos + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.text(order.invoiceNo || order.orderId || 'N/A', 70, yPos + 6);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('Invoice Date : ', 54, yPos + 10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(new Date().toLocaleDateString('en-IN'), 74, yPos + 10);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text('No of Boxes : ', 54, yPos + 14);
+    doc.setFontSize(6);
+    doc.text(`${boxNo}/${totalBoxes}`, 75, yPos + 14);
 
-    // Right side
-    doc.setFont('helvetica', 'bold');
-    doc.text('Order ID', 54, yPos + 2.5);
-    doc.setFont('helvetica', 'normal');
-    const orderId = doc.splitTextToSize(`: ${order.orderId}`, 45);
-    doc.text(orderId, 54, yPos + 5);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('Invoice No', 54, yPos + 8.5);
-    doc.setFont('helvetica', 'normal');
-    const invoiceNo = doc.splitTextToSize(`: ${order.invoiceNo || order.orderId || 'N/A'}`, 45);
-    doc.text(invoiceNo, 54, yPos + 11);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('Invoice Date', 54, yPos + 14.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`: ${new Date().toLocaleDateString('en-IN')}`, 54, yPos + 17);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('No of Boxes', 75, yPos + 14.5);
-    doc.setFontSize(6.5);
-    doc.text(`: ${boxNo}/${totalBoxes}`, 75, yPos + 17);
-
-    yPos += 22;
+    yPos += 24;
 
     // Table headers
     doc.setFillColor(220, 220, 220);
@@ -530,8 +522,9 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      // Wrap long product names
-      const productText = `${item.productName} - ${item.sku}`;
+      // Extract just product name and add SKU on next line
+      const productName = extractProductName(item.productName);
+      const productText = `${productName}\n${item.sku}`;
       const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
