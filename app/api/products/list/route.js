@@ -1,40 +1,47 @@
-import { google } from 'googleapis';
-import { NextResponse } from 'next/server';
+// app/api/products/list/route.js - Match existing project structure
+import { getSheets } from '@/lib/googleSheets';
 
-export async function GET() {
+export async function GET(request) {
   try {
-    // Initialize Google Sheets API
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+    const sheets = await getSheets();
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
 
     // Fetch data from "All Form Data" sheet
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'All Form Data!A2:Z', // Adjust range based on your sheet structure
+      range: 'All Form Data!A1:Z', // Get headers + data
     });
 
     const rows = response.data.values || [];
     
+    if (rows.length === 0) {
+      return Response.json({ orders: [], products: [] });
+    }
+
+    // Parse headers
+    const headers = rows[0];
+    const getColumnIndex = (name) => headers.findIndex(h => h === name);
+
+    const orderIdCol = getColumnIndex('Order Id');
+    const productsCol = getColumnIndex('Products');
+    const skuCol = getColumnIndex('SKU(All)');
+    const mrpCol = getColumnIndex('MRP');
+    const packageCol = getColumnIndex('Package');
+    const qtyCol = getColumnIndex('Qty');
+    const totalCol = getColumnIndex('Total');
+
     // Map rows to product objects
-    // Adjust column indices based on your actual sheet structure
-    const products = rows.map((row) => ({
-      oid: row[0] || '',           // Column A: OID
-      sku: row[1] || '',            // Column B: SKU
-      productName: row[2] || '',    // Column C: Product Name
-      package: row[3] || '',        // Column D: Package/UOM
-      quantity: row[4] || '0',      // Column E: Quantity
-      // Add more fields as needed based on your sheet structure
+    const products = rows.slice(1).map((row) => ({
+      oid: row[orderIdCol] || '',
+      sku: row[skuCol] || '',
+      productName: row[productsCol] || '',
+      package: row[packageCol] || '',
+      quantity: row[qtyCol] || '0',
+      mrp: row[mrpCol] || '0',
+      total: row[totalCol] || '0',
     }));
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       products,
       count: products.length,
@@ -42,7 +49,7 @@ export async function GET() {
 
   } catch (error) {
     console.error('Error fetching products:', error);
-    return NextResponse.json(
+    return Response.json(
       {
         success: false,
         error: 'Failed to fetch products',
