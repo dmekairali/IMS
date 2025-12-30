@@ -48,12 +48,25 @@ export async function POST(request) {
     console.log('✅ Packing list buffer created, size:', packingListBuffer.length);
     
     console.log('☁️ Uploading packing list to Drive...');
-    const packingListFile = await uploadPDFToDrive(
-      packingListBuffer,
-      `PackingList_${order.orderId}.pdf`,
-      folderId
-    );
-    console.log('✅ Packing list uploaded:', packingListFile.webViewLink);
+    console.log('   Folder ID:', folderId);
+    console.log('   File name:', `PackingList_${order.orderId}.pdf`);
+    
+    let packingListFile;
+    try {
+      packingListFile = await uploadPDFToDrive(
+        packingListBuffer,
+        `PackingList_${order.orderId}.pdf`,
+        folderId
+      );
+      console.log('✅ Packing list uploaded:', packingListFile.webViewLink);
+    } catch (uploadError) {
+      console.error('❌ Packing list upload failed:');
+      console.error('   Error name:', uploadError.name);
+      console.error('   Error message:', uploadError.message);
+      console.error('   Error code:', uploadError.code);
+      console.error('   Full error:', JSON.stringify(uploadError, null, 2));
+      throw new Error(`Failed to upload packing list: ${uploadError.message}`);
+    }
 
     // Generate Stickers PDF
     console.log('🏷️ Generating stickers PDF...');
@@ -64,12 +77,25 @@ export async function POST(request) {
     console.log('✅ Stickers buffer created, size:', stickersBuffer.length);
     
     console.log('☁️ Uploading stickers to Drive...');
-    const stickersFile = await uploadPDFToDrive(
-      stickersBuffer,
-      `Stickers_${order.orderId}.pdf`,
-      folderId
-    );
-    console.log('✅ Stickers uploaded:', stickersFile.webViewLink);
+    console.log('   Folder ID:', folderId);
+    console.log('   File name:', `Stickers_${order.orderId}.pdf`);
+    
+    let stickersFile;
+    try {
+      stickersFile = await uploadPDFToDrive(
+        stickersBuffer,
+        `Stickers_${order.orderId}.pdf`,
+        folderId
+      );
+      console.log('✅ Stickers uploaded:', stickersFile.webViewLink);
+    } catch (uploadError) {
+      console.error('❌ Stickers upload failed:');
+      console.error('   Error name:', uploadError.name);
+      console.error('   Error message:', uploadError.message);
+      console.error('   Error code:', uploadError.code);
+      console.error('   Full error:', JSON.stringify(uploadError, null, 2));
+      throw new Error(`Failed to upload stickers: ${uploadError.message}`);
+    }
 
     // Update DispatchData sheet with links
     console.log('📊 Updating DispatchData sheet...');
