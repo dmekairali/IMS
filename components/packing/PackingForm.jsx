@@ -10,12 +10,12 @@ export default function PackingForm({ orders, products, onRefresh }) {
 
   // When order is selected, populate packing items from products
   const handleOrderSelect = (orderId) => {
-    const order = orders.find(o => o.oid === orderId);
+    const order = orders.find(o => o.orderId === orderId);
     if (!order) return;
 
     setSelectedOrder(order);
 
-    // Get products for this order from All Form Data
+    // Get products for this order from the products array (All Form Data)
     const orderProducts = products.filter(p => p.oid === orderId);
     
     // Initialize packing items with ordered quantities
@@ -77,20 +77,20 @@ export default function PackingForm({ orders, products, onRefresh }) {
       doc.setFont('helvetica', 'bold');
       doc.text('To', 15, 50);
       doc.text('Order ID', 140, 50);
-      doc.text(`: ${selectedOrder.oid || 'N/A'}`, 170, 50);
+      doc.text(`: ${selectedOrder.orderId || 'N/A'}`, 170, 50);
 
       doc.setFont('helvetica', 'normal');
       doc.text('Party Name', 15, 57);
-      doc.text(`: ${selectedOrder.clientName || 'N/A'}`, 42, 57);
+      doc.text(`: ${selectedOrder.customerName || 'N/A'}`, 42, 57);
       
       doc.text('Invoice No', 140, 57);
-      doc.text(`: ${selectedOrder.invoiceNo || 'N/A'}`, 170, 57);
+      doc.text(`: ${selectedOrder.invoiceNo || selectedOrder.orderId || 'N/A'}`, 170, 57);
 
       doc.text('Party Address', 15, 64);
       doc.text(':', 42, 64);
       
-      // Handle multi-line address
-      const address = selectedOrder.address || 'N/A';
+      // Handle multi-line address - use mobile if address not available
+      const address = selectedOrder.address || selectedOrder.mobile || 'N/A';
       const addressLines = doc.splitTextToSize(address, 85);
       doc.text(addressLines, 45, 64);
 
@@ -99,7 +99,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
 
       const addressHeight = addressLines.length * 5;
       doc.text('Contact No.', 15, 64 + addressHeight);
-      doc.text(`: ${selectedOrder.contact || 'N/A'}`, 42, 64 + addressHeight);
+      doc.text(`: ${selectedOrder.mobile || 'N/A'}`, 42, 64 + addressHeight);
 
       doc.text('No of Boxes', 140, 71);
       doc.text(`: ${totalBoxes}`, 170, 71);
@@ -174,7 +174,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
       });
 
       // Save the PDF
-      doc.save(`PackingList_${selectedOrder.oid}.pdf`);
+      doc.save(`PackingList_${selectedOrder.orderId}.pdf`);
     } catch (error) {
       console.error('Error generating packing list:', error);
       alert('Error generating packing list. Please try again.');
@@ -229,19 +229,19 @@ export default function PackingForm({ orders, products, onRefresh }) {
         doc.setFont('helvetica', 'bold');
         doc.text('To', 15, yPos);
         doc.text('Order ID', 140, yPos);
-        doc.text(`: ${selectedOrder.oid}`, 165, yPos);
+        doc.text(`: ${selectedOrder.orderId}`, 165, yPos);
 
         yPos += 7;
         doc.setFont('helvetica', 'normal');
         doc.text('Party Name', 15, yPos);
-        doc.text(`: ${selectedOrder.clientName}`, 40, yPos);
+        doc.text(`: ${selectedOrder.customerName}`, 40, yPos);
         doc.text('Invoice No', 140, yPos);
-        doc.text(`: ${selectedOrder.invoiceNo || 'N/A'}`, 165, yPos);
+        doc.text(`: ${selectedOrder.invoiceNo || selectedOrder.orderId || 'N/A'}`, 165, yPos);
 
         yPos += 7;
         doc.text('Party Address', 15, yPos);
         doc.text(':', 40, yPos);
-        const addressLines = doc.splitTextToSize(selectedOrder.address || '', 85);
+        const addressLines = doc.splitTextToSize(selectedOrder.address || selectedOrder.mobile || '', 85);
         doc.text(addressLines, 42, yPos);
 
         doc.text('Invoice Date', 140, yPos);
@@ -249,7 +249,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
 
         yPos += addressLines.length * 5 + 2;
         doc.text('Contact No.', 15, yPos);
-        doc.text(`: ${selectedOrder.contact}`, 40, yPos);
+        doc.text(`: ${selectedOrder.mobile}`, 40, yPos);
         doc.text('No of Boxes', 140, yPos);
         doc.text(`: ${boxNo}/${totalBoxes}`, 165, yPos);
 
@@ -296,7 +296,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
         });
       });
 
-      doc.save(`Stickers_${selectedOrder.oid}.pdf`);
+      doc.save(`Stickers_${selectedOrder.orderId}.pdf`);
     } catch (error) {
       console.error('Error generating stickers:', error);
       alert('Error generating stickers. Please try again.');
@@ -318,13 +318,13 @@ export default function PackingForm({ orders, products, onRefresh }) {
             </label>
             <select
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-              value={selectedOrder?.oid || ''}
+              value={selectedOrder?.orderId || ''}
               onChange={(e) => handleOrderSelect(e.target.value)}
             >
               <option value="">-- Select an Order --</option>
               {orders.map((order) => (
-                <option key={order.oid} value={order.oid}>
-                  {order.oid} - {order.clientName}
+                <option key={order.orderId} value={order.orderId}>
+                  {order.orderId} - {order.customerName}
                 </option>
               ))}
             </select>
@@ -337,7 +337,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
             <input
               type="text"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50"
-              value={selectedOrder?.oid || ''}
+              value={selectedOrder?.orderId || ''}
               readOnly
             />
           </div>
@@ -349,7 +349,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
             <input
               type="text"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50"
-              value={selectedOrder?.invoiceNo || ''}
+              value={selectedOrder?.invoiceNo || selectedOrder?.orderId || ''}
               readOnly
             />
           </div>
@@ -361,7 +361,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
             <input
               type="text"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50"
-              value={selectedOrder?.clientName || ''}
+              value={selectedOrder?.customerName || ''}
               readOnly
             />
           </div>
@@ -373,7 +373,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
             <input
               type="text"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50"
-              value={selectedOrder?.contact || ''}
+              value={selectedOrder?.mobile || ''}
               readOnly
             />
           </div>
@@ -385,7 +385,7 @@ export default function PackingForm({ orders, products, onRefresh }) {
             <textarea
               rows="3"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50"
-              value={selectedOrder?.address || ''}
+              value={selectedOrder?.address || selectedOrder?.mobile || ''}
               readOnly
             />
           </div>
