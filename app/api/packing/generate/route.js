@@ -108,12 +108,28 @@ export async function POST(request) {
   }
 }
 
-// Helper function to extract just the product name from full product string
-function extractProductName(fullProductName) {
-  // Product format: "Name - SKU - details - price - etc"
-  // We want just the name part before first " - "
-  const parts = fullProductName.split(' - ');
-  return parts[0].trim();
+// Helper function to extract product name, SKU, and MRP
+function formatProductDetails(item) {
+  // Extract product name (before first " - ")
+  const parts = item.productName.split(' - ');
+  const productName = parts[0].trim();
+  
+  // Extract MRP from the full product name
+  // Format: "Name - SKU - Size - ₹Price - other info"
+  let mrp = '';
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].includes('₹') || parts[i].includes('Rs')) {
+      mrp = parts[i].trim();
+      break;
+    }
+  }
+  
+  // Format: "Product Name - SKU - ₹MRP"
+  if (mrp) {
+    return `${productName} - ${item.sku} - ${mrp}`;
+  } else {
+    return `${productName} - ${item.sku}`;
+  }
 }
 
 async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
@@ -176,10 +192,10 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   // Order details section with border
   let yPos = startY + 18;
   doc.setLineWidth(0.2);
-  doc.rect(3, yPos, 99, 28); // Outer border
+  doc.rect(3, yPos, 99, 30); // Increased height to 30mm
   
   // Vertical divider
-  doc.line(52.5, yPos, 52.5, yPos + 28);
+  doc.line(52.5, yPos, 52.5, yPos + 30);
 
   // Left side
   doc.setFontSize(6);
@@ -201,7 +217,7 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   const mobile = order.mobile || 'N/A';
   const fullAddress = `${address}\nContact No. : ${mobile}`;
   
-  // Wider text area for address (use full left section width)
+  // Wider text area for address (use full left section width minus margins)
   const addressLines = doc.splitTextToSize(fullAddress, 46);
   doc.text(addressLines, 4, yPos + 14);
 
@@ -226,7 +242,7 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   doc.text('No of Boxes : ', 54, yPos + 15);
   doc.text(totalBoxes.toString(), 77, yPos + 15);
 
-  yPos = yPos + 31;
+  yPos = yPos + 33;
 
   // Group items by box number
   const itemsByBox = {};
@@ -295,10 +311,8 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      // Extract just the product name (before first " - ")
-      const productName = extractProductName(item.productName);
-      // Add SKU on next line
-      const productText = `${productName}\n${item.sku}`;
+      // Format: "Product Name - SKU - ₹MRP"
+      const productText = formatProductDetails(item);
       const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
@@ -443,10 +457,10 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
 
     // Order details section with border
     doc.setLineWidth(0.2);
-    doc.rect(3, yPos, 99, 22); // Increased height
+    doc.rect(3, yPos, 99, 24); // Increased height
     
     // Vertical divider
-    doc.line(52.5, yPos, 52.5, yPos + 22);
+    doc.line(52.5, yPos, 52.5, yPos + 24);
 
     // Left side
     doc.setFontSize(5.5);
@@ -492,7 +506,7 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     doc.setFontSize(6);
     doc.text(`${boxNo}/${totalBoxes}`, 75, yPos + 14);
 
-    yPos += 24;
+    yPos += 26;
 
     // Table headers
     doc.setFillColor(220, 220, 220);
@@ -522,9 +536,8 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      // Extract just product name and add SKU on next line
-      const productName = extractProductName(item.productName);
-      const productText = `${productName}\n${item.sku}`;
+      // Format: "Product Name - SKU - ₹MRP"
+      const productText = formatProductDetails(item);
       const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
