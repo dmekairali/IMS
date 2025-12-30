@@ -102,7 +102,7 @@ export async function GET(request) {
       });
     }
 
-    orders.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+   
     return Response.json({ orders });
   } catch (error) {
     console.error('Error fetching orders:', error);
