@@ -102,7 +102,6 @@ export async function GET(request) {
       });
     }
 
-   
     return Response.json({ orders });
   } catch (error) {
     console.error('Error fetching orders:', error);
