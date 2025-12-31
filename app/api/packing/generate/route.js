@@ -161,16 +161,39 @@ async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
   try {
     const fs = await import('fs');
     const path = await import('path');
-    const logoPath = path.default.join(process.cwd(), 'public', 'kairali-logo.png');
     
-    if (fs.default.existsSync(logoPath)) {
-      const logoData = fs.default.readFileSync(logoPath);
-      const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
-      doc.addImage(logoBase64, 'PNG', x, y, width, height);
-      return true;
+    // Try multiple possible logo paths
+    const possiblePaths = [
+      path.default.join(process.cwd(), 'public', 'kairali-logo.png'),
+      path.default.join(process.cwd(), 'public', 'logo.png'),
+      '/var/task/public/kairali-logo.png', // Vercel path
+      './public/kairali-logo.png'
+    ];
+    
+    let logoPath = null;
+    for (const testPath of possiblePaths) {
+      if (fs.default.existsSync(testPath)) {
+        logoPath = testPath;
+        console.log('✅ Logo found at:', testPath);
+        break;
+      }
     }
+    
+    if (!logoPath) {
+      console.log('⚠️ Logo file not found. Tried paths:', possiblePaths);
+      console.log('Current directory:', process.cwd());
+      console.log('Files in public:', fs.default.existsSync(path.default.join(process.cwd(), 'public')) ? 
+        fs.default.readdirSync(path.default.join(process.cwd(), 'public')) : 'public folder not found');
+      return false;
+    }
+    
+    const logoData = fs.default.readFileSync(logoPath);
+    const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
+    doc.addImage(logoBase64, 'PNG', x, y, width, height);
+    console.log('✅ Logo added to PDF');
+    return true;
   } catch (error) {
-    console.log('Logo not found, continuing without logo');
+    console.log('⚠️ Logo error:', error.message);
   }
   return false;
 }
@@ -338,7 +361,9 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
     boxItems.forEach((item) => {
       // Format: "Product Name - SKU - ₹MRP"
       const productText = formatProductDetails(item);
-      const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
+      
+      // Use 60mm for wrapping (column is 66mm, need margin)
+      const wrapped = doc.splitTextToSize(productText, 60);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
       qtyLines.push(item.packingQty.toString());
@@ -563,7 +588,9 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     boxItems.forEach((item) => {
       // Format: "Product Name - SKU - ₹MRP"
       const productText = formatProductDetails(item);
-      const wrapped = doc.splitTextToSize(productText, colWidths[1] - 2);
+      
+      // Use 60mm for wrapping (column is 66mm, need margin)
+      const wrapped = doc.splitTextToSize(productText, 60);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
       qtyLines.push(item.packingQty.toString());
