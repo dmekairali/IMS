@@ -13,6 +13,20 @@ export async function POST(request) {
     
     const { order, packingItems } = body;
 
+    // Debug logging
+    console.log('🔍 DEBUG - Order data:', {
+      orderId: order.orderId,
+      invoiceNo: order.invoiceNo,
+      customerName: order.customerName,
+      mobile: order.mobile
+    });
+    
+    console.log('🔍 DEBUG - Packing items sample:', packingItems.slice(0, 2).map(item => ({
+      productName: item.productName,
+      sku: item.sku,
+      packingQty: item.packingQty
+    })));
+
     if (!order || !packingItems || packingItems.length === 0) {
       console.error('❌ Invalid request data:', { order: !!order, packingItems: packingItems?.length });
       return NextResponse.json(
@@ -114,6 +128,13 @@ function formatProductDetails(item) {
   const parts = item.productName.split(' - ');
   const productName = parts[0].trim();
   
+  // Get SKU - use item.sku or extract from product name if blank
+  let sku = item.sku || '';
+  if (!sku && parts.length > 1) {
+    // If SKU is blank, try to get it from second part of product name
+    sku = parts[1].trim();
+  }
+  
   // Extract MRP from the full product name
   // Format: "Name - SKU - Size - ₹Price - other info"
   let mrp = '';
@@ -125,10 +146,14 @@ function formatProductDetails(item) {
   }
   
   // Format: "Product Name - SKU - ₹MRP"
-  if (mrp) {
-    return `${productName} - ${item.sku} - ${mrp}`;
+  if (sku && mrp) {
+    return `${productName} - ${sku} - ${mrp}`;
+  } else if (sku) {
+    return `${productName} - ${sku}`;
+  } else if (mrp) {
+    return `${productName} - ${mrp}`;
   } else {
-    return `${productName} - ${item.sku}`;
+    return productName;
   }
 }
 
