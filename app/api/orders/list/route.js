@@ -34,6 +34,7 @@ export async function GET(request) {
     const clientNameCol = getColumnIndex('Name of Client');
     const mobileCol = getColumnIndex('Mobile');
     const invoiceAmountCol = getColumnIndex('Invoice Amount');
+    const invoiceNoCol = getColumnIndex('Invoice No');
     const dispatchedCol = getColumnIndex('Dispatched');
     const dispatchStatusCol = getColumnIndex('Dispatch Status');
     const billingAddressCol = getColumnIndex('Billing Address');
@@ -97,6 +98,7 @@ export async function GET(request) {
         customerName: row[clientNameCol] || 'Unknown',
         mobile: row[mobileCol] || '',
         invoiceAmount: parseFloat(row[invoiceAmountCol] || '0'),
+        invoiceNo: row[invoiceNoCol] || '',
         status: row[dispatchStatusCol] || 'Pending',
         dispatched: dispatched === 'Yes',
         dispatchedInOIDLog: dispatchedOIDs.has(orderId),
