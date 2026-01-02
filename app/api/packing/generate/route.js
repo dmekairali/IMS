@@ -24,7 +24,7 @@ export async function POST(request) {
     console.log('🔍 DEBUG - Packing items sample:', packingItems.slice(0, 2).map(item => ({
       productName: item.productName,
       sku: item.sku,
-      packingQty: item.packingQty
+      orderedQty: item.orderedQty
     })));
 
     if (!order || !packingItems || packingItems.length === 0) {
@@ -383,7 +383,8 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
       const wrapped = doc.splitTextToSize(productText, 58);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
-      qtyLines.push(item.packingQty.toString());
+      // Use orderedQty (new field name)
+      qtyLines.push((item.orderedQty || 0).toString());
     });
 
     // DYNAMIC row height calculation - SUM all product heights
@@ -642,7 +643,8 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
       const wrapped = doc.splitTextToSize(productText, 58);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
-      qtyLines.push(item.packingQty.toString());
+      // Use orderedQty (new field name)
+      qtyLines.push((item.orderedQty || 0).toString());
     });
 
     // DYNAMIC row height calculation - SUM all product heights
