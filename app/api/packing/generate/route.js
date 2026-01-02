@@ -145,6 +145,8 @@ function formatProductDetails(item) {
     }
   }
   
+return productName;
+  /*
   // Format: "Product Name - SKU - ₹MRP"
   if (sku && mrp) {
     return `${productName} - ${sku} - ${mrp}`;
@@ -155,6 +157,7 @@ function formatProductDetails(item) {
   } else {
     return productName;
   }
+  */
 }
 
 async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
