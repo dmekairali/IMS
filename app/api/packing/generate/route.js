@@ -224,14 +224,19 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   doc.setFont('helvetica', 'bold');
   doc.text('To', 4, yPos + 3);
   
-  // Party Name - inline
+  // Party Name - with wrapping for long names
   doc.text('Party Name : ', 4, yPos + 7);
   doc.setFont('helvetica', 'normal');
-  doc.text(order.customerName || 'N/A', 20, yPos + 7);
+  const customerNameLines = doc.splitTextToSize(order.customerName || 'N/A', 42); // Wrap at 42mm
+  doc.text(customerNameLines, 4, yPos + 10); // Start below label
+  
+  // Calculate dynamic address start position
+  const nameHeight = customerNameLines.length * 3; // 3mm per line for name
+  const addressLabelY = yPos + 10 + nameHeight + 2;
   
   // Party Address + Contact merged area (wider)
   doc.setFont('helvetica', 'bold');
-  doc.text('Party Address :', 4, yPos + 11);
+  doc.text('Party Address :', 4, addressLabelY);
   doc.setFont('helvetica', 'normal');
   
   // Combine address and contact with line break - CLEAN DATA
@@ -249,7 +254,7 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   
   // Wider text area for address (use 44mm to stay within 49.5mm border)
   const addressLines = doc.splitTextToSize(fullAddress, 44);
-  doc.text(addressLines, 4, yPos + 14);
+  doc.text(addressLines, 4, addressLabelY + 3);
 
   // Right side - all inline
   doc.setFont('helvetica', 'bold');
@@ -350,18 +355,16 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
       qtyLines.push(item.packingQty.toString());
     });
 
-    // DYNAMIC row height calculation based on actual content
-    // Calculate the maximum height needed for all products
-    let maxProductHeight = 0;
+    // DYNAMIC row height calculation - SUM all product heights
+    let totalProductHeight = 0;
     productLines.forEach((lines) => {
-      const height = lines.length * 2.5; // 2.5mm per line
-      if (height > maxProductHeight) maxProductHeight = height;
+      totalProductHeight += lines.length * 2.5; // Add each product's height
     });
     
-    // Add spacing between products and minimum padding
-    const spacingBetweenProducts = (productLines.length - 1) * 2; // 2mm between each product
-    const minPadding = 4; // Minimum 4mm top+bottom padding
-    const rowHeight = Math.max(maxProductHeight + spacingBetweenProducts + minPadding, 12);
+    // Add spacing between products and padding
+    const spacingBetweenProducts = Math.max((productLines.length - 1) * 2, 0); // 2mm between each product
+    const minPadding = 6; // 6mm top+bottom padding
+    const rowHeight = Math.max(totalProductHeight + spacingBetweenProducts + minPadding, 12);
 
     // Draw cell borders
     colWidths.forEach((width, i) => {
@@ -598,18 +601,16 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
       qtyLines.push(item.packingQty.toString());
     });
 
-    // DYNAMIC row height calculation based on actual content
-    // Calculate the maximum height needed for all products
-    let maxProductHeight = 0;
+    // DYNAMIC row height calculation - SUM all product heights
+    let totalProductHeight = 0;
     productLines.forEach((lines) => {
-      const height = lines.length * 2.2; // 2.2mm per line for stickers
-      if (height > maxProductHeight) maxProductHeight = height;
+      totalProductHeight += lines.length * 2.2; // Add each product's height
     });
     
-    // Add spacing between products and minimum padding
-    const spacingBetweenProducts = (productLines.length - 1) * 1.5; // 1.5mm between each product
-    const minPadding = 4; // Minimum 4mm top+bottom padding
-    const rowHeight = Math.max(maxProductHeight + spacingBetweenProducts + minPadding, 10);
+    // Add spacing between products and padding
+    const spacingBetweenProducts = Math.max((productLines.length - 1) * 1.5, 0); // 1.5mm between each product
+    const minPadding = 6; // 6mm top+bottom padding
+    const rowHeight = Math.max(totalProductHeight + spacingBetweenProducts + minPadding, 10);
 
     // Draw cell borders
     colWidths.forEach((width, i) => {
