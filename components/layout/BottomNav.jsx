@@ -1,9 +1,13 @@
 'use client';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const navItems = [
     { 
@@ -48,49 +52,142 @@ export default function BottomNav() {
     },
   ];
 
-  return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-      <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
-        {navItems.map((item) => {
-          const isActive = pathname === item.path;
-          const isDisabled = item.disabled;
+  const handleProfileClick = () => {
+    setShowLogoutModal(true);
+  };
 
-          if (isDisabled) {
+  const handleLogout = () => {
+    setShowLogoutModal(false);
+    logout();
+  };
+
+  return (
+    <>
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+        <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+          {navItems.map((item) => {
+            const isActive = pathname === item.path;
+            const isDisabled = item.disabled;
+
+            if (isDisabled) {
+              return (
+                <div
+                  key={item.name}
+                  className="flex flex-col items-center justify-center flex-1 py-2 cursor-not-allowed opacity-40"
+                >
+                  <div className="text-gray-400">
+                    {item.icon}
+                  </div>
+                  <span className="text-xs mt-1 text-gray-400 font-medium">
+                    {item.name}
+                  </span>
+                </div>
+              );
+            }
+
             return (
-              <div
+              <Link
                 key={item.name}
-                className="flex flex-col items-center justify-center flex-1 py-2 cursor-not-allowed opacity-40"
+                href={item.path}
+                className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${
+                  isActive
+                    ? 'text-teal-600'
+                    : 'text-gray-600 hover:text-teal-500'
+                }`}
               >
-                <div className="text-gray-400">
+                <div className={isActive ? 'scale-110' : ''}>
                   {item.icon}
                 </div>
-                <span className="text-xs mt-1 text-gray-400 font-medium">
+                <span className={`text-xs mt-1 font-medium ${isActive ? 'text-teal-600' : ''}`}>
                   {item.name}
                 </span>
-              </div>
+              </Link>
             );
-          }
+          })}
 
-          return (
-            <Link
-              key={item.name}
-              href={item.path}
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${
-                isActive
-                  ? 'text-teal-600'
-                  : 'text-gray-600 hover:text-teal-500'
-              }`}
-            >
-              <div className={isActive ? 'scale-110' : ''}>
-                {item.icon}
+          {/* Profile Button */}
+          <button
+            onClick={handleProfileClick}
+            className="flex flex-col items-center justify-center flex-1 py-2 text-gray-600 hover:text-teal-500 transition-colors"
+          >
+            <div className="relative">
+              <div className="w-7 h-7 bg-teal-600 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs font-bold">
+                  {user?.username?.charAt(0).toUpperCase()}
+                </span>
               </div>
-              <span className={`text-xs mt-1 font-medium ${isActive ? 'text-teal-600' : ''}`}>
-                {item.name}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+              {/* Role indicator dot */}
+              <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                user?.role === 'admin' ? 'bg-blue-500' : 'bg-green-500'
+              }`} />
+            </div>
+            <span className="text-xs mt-1 font-medium">Profile</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setShowLogoutModal(false)}
+          />
+          
+          {/* Modal Content */}
+          <div className="relative bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl animate-slide-up">
+            {/* User Info */}
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span className="text-white text-2xl font-bold">
+                  {user?.username?.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-gray-800">{user?.name}</h3>
+              <p className="text-sm text-gray-500 capitalize mt-1">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  user?.role === 'admin' 
+                    ? 'bg-blue-100 text-blue-800' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {user?.role}
+                </span>
+              </p>
+              <p className="text-xs text-gray-400 mt-2">
+                @{user?.username}
+              </p>
+            </div>
+
+            <div className="h-px bg-gray-200 mb-4" />
+
+            {/* Logout Question */}
+            <p className="text-center text-gray-700 mb-6">
+              Do you want to logout?
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
