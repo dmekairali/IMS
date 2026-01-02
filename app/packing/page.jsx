@@ -73,11 +73,6 @@ export default function PackingPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="max-w-6xl mx-auto p-4">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Packing Management</h1>
-          <p className="text-gray-600">Create and manage packing lists and stickers</p>
-        </div>
-
         {!selectedOrder ? (
           <PackingOrdersList 
             orders={orders} 
