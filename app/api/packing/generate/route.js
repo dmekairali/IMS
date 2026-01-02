@@ -145,8 +145,6 @@ function formatProductDetails(item) {
     }
   }
   
-return productName;
-  /*
   // Format: "Product Name - SKU - ₹MRP"
   if (sku && mrp) {
     return `${productName} - ${sku} - ${mrp}`;
@@ -157,48 +155,48 @@ return productName;
   } else {
     return productName;
   }
-  */
 }
 
 async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
   try {
-    const fs = await import('fs');
-    const path = await import('path');
+    // Import logo data
+    const { KAIRALI_LOGO_BASE64 } = await import('@/lib/logoData');
     
-    // Try multiple possible logo paths
-    const possiblePaths = [
-      path.default.join(process.cwd(), 'public', 'kairali-logo.png'),
-      path.default.join(process.cwd(), 'public', 'logo.png'),
-      '/var/task/public/kairali-logo.png', // Vercel path
-      './public/kairali-logo.png'
-    ];
+    // Check if base64 logo is available
+    if (KAIRALI_LOGO_BASE64 && !KAIRALI_LOGO_BASE64.includes('PASTE_YOUR_BASE64_STRING_HERE')) {
+      doc.addImage(KAIRALI_LOGO_BASE64, 'PNG', x, y, width, height);
+      console.log('✅ Logo added to PDF from base64');
+      return true;
+    }
     
-    let logoPath = null;
-    for (const testPath of possiblePaths) {
-      if (fs.default.existsSync(testPath)) {
-        logoPath = testPath;
-        console.log('✅ Logo found at:', testPath);
-        break;
+    console.log('⚠️ Base64 logo not configured. Please update lib/logoData.js with your logo.');
+    console.log('ℹ️ Convert your logo at: https://base64.guru/converter/encode/image');
+    
+    // Fallback: Try filesystem (works in development)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        
+        const logoPath = path.default.join(process.cwd(), 'public', 'kairali-logo.png');
+        
+        if (fs.default.existsSync(logoPath)) {
+          const logoData = fs.default.readFileSync(logoPath);
+          const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
+          doc.addImage(logoBase64, 'PNG', x, y, width, height);
+          console.log('✅ Logo added to PDF from filesystem (development)');
+          return true;
+        }
+      } catch (fsError) {
+        console.log('⚠️ Filesystem fallback failed:', fsError.message);
       }
     }
     
-    if (!logoPath) {
-      console.log('⚠️ Logo file not found. Tried paths:', possiblePaths);
-      console.log('Current directory:', process.cwd());
-      console.log('Files in public:', fs.default.existsSync(path.default.join(process.cwd(), 'public')) ? 
-        fs.default.readdirSync(path.default.join(process.cwd(), 'public')) : 'public folder not found');
-      return false;
-    }
-    
-    const logoData = fs.default.readFileSync(logoPath);
-    const logoBase64 = `data:image/png;base64,${logoData.toString('base64')}`;
-    doc.addImage(logoBase64, 'PNG', x, y, width, height);
-    console.log('✅ Logo added to PDF');
-    return true;
+    return false;
   } catch (error) {
     console.log('⚠️ Logo error:', error.message);
+    return false;
   }
-  return false;
 }
 
 async function generatePackingListPDF(order, packingItems, jsPDF) {
