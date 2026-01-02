@@ -234,13 +234,21 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   doc.text('Party Address :', 4, yPos + 11);
   doc.setFont('helvetica', 'normal');
   
-  // Combine address and contact with line break
+  // Combine address and contact with line break - CLEAN DATA
   const address = order.shippingAddress || order.billingAddress || 'N/A';
   const mobile = order.mobile || 'N/A';
-  const fullAddress = `${address}\nContact No. : ${mobile}`;
   
-  // Wider text area for address (use full left section width minus margins)
-  const addressLines = doc.splitTextToSize(fullAddress, 46);
+  // Clean the address - remove undefined, null, empty strings
+  const cleanAddress = address
+    .split(',')
+    .map(part => part.trim())
+    .filter(part => part && part !== 'undefined' && part !== 'null' && part.length > 0)
+    .join(', ');
+  
+  const fullAddress = `${cleanAddress}\nContact No. : ${mobile}`;
+  
+  // Wider text area for address (use 44mm to stay within 49.5mm border)
+  const addressLines = doc.splitTextToSize(fullAddress, 44);
   doc.text(addressLines, 4, yPos + 14);
 
   // Right side - all inline
@@ -333,7 +341,6 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      // Format: "Product Name - SKU - ₹MRP"
       const productText = formatProductDetails(item);
       
       // Use 58mm for wrapping (column is 66mm, need more margin to stay within borders)
@@ -343,9 +350,18 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
       qtyLines.push(item.packingQty.toString());
     });
 
-    // Calculate total lines for all products
-    const totalLines = productLines.reduce((sum, lines) => sum + lines.length, 0);
-    const rowHeight = Math.max(totalLines * 2.5 + (productLines.length - 1) * 2, 8);
+    // DYNAMIC row height calculation based on actual content
+    // Calculate the maximum height needed for all products
+    let maxProductHeight = 0;
+    productLines.forEach((lines) => {
+      const height = lines.length * 2.5; // 2.5mm per line
+      if (height > maxProductHeight) maxProductHeight = height;
+    });
+    
+    // Add spacing between products and minimum padding
+    const spacingBetweenProducts = (productLines.length - 1) * 2; // 2mm between each product
+    const minPadding = 4; // Minimum 4mm top+bottom padding
+    const rowHeight = Math.max(maxProductHeight + spacingBetweenProducts + minPadding, 12);
 
     // Draw cell borders
     colWidths.forEach((width, i) => {
@@ -357,23 +373,23 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
     doc.setFontSize(7);
     doc.text(boxNo.toString(), colX[0] + colWidths[0]/2, yPos + rowHeight/2 + 1, { align: 'center' });
     
-    // Product details - each product with proper wrapping
+    // Product details - each product with proper wrapping and spacing
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(5.5);
-    let lineYPos = yPos + 2.5;
+    let lineYPos = yPos + 3; // Start 3mm from top
     productLines.forEach((wrappedLines, index) => {
       doc.text(wrappedLines, colX[1] + 1, lineYPos);
-      lineYPos += wrappedLines.length * 2.5;
+      lineYPos += wrappedLines.length * 2.5; // Move down by line count
       if (index < productLines.length - 1) {
         lineYPos += 2; // Space between products
       }
     });
     
-    // UOM - aligned with each product
-    lineYPos = yPos + 2.5;
+    // UOM - aligned with each product center
+    lineYPos = yPos + 3;
     uomLines.forEach((uom, index) => {
       const productLineCount = productLines[index].length;
-      const uomYPos = lineYPos + (productLineCount * 2.5) / 2;
+      const uomYPos = lineYPos + (productLineCount * 2.5) / 2; // Center vertically
       doc.text(uom, colX[2] + colWidths[2]/2, uomYPos, { align: 'center' });
       lineYPos += productLineCount * 2.5;
       if (index < uomLines.length - 1) {
@@ -381,12 +397,12 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
       }
     });
     
-    // Quantity - aligned with each product, bold
+    // Quantity - aligned with each product center, bold
     doc.setFont('helvetica', 'bold');
-    lineYPos = yPos + 2.5;
+    lineYPos = yPos + 3;
     qtyLines.forEach((qty, index) => {
       const productLineCount = productLines[index].length;
-      const qtyYPos = lineYPos + (productLineCount * 2.5) / 2;
+      const qtyYPos = lineYPos + (productLineCount * 2.5) / 2; // Center vertically
       doc.text(qty, colX[3] + colWidths[3]/2, qtyYPos, { align: 'center' });
       lineYPos += productLineCount * 2.5;
       if (index < qtyLines.length - 1) {
@@ -494,7 +510,7 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     // Party Name - inline with wrapping
     doc.text('Party Name : ', 4, yPos + 6);
     doc.setFont('helvetica', 'normal');
-    const customerNameLines = doc.splitTextToSize(order.customerName, 40); // Limit width to 40mm
+    const customerNameLines = doc.splitTextToSize(order.customerName, 38); // Limit width to 38mm
     doc.text(customerNameLines, 20, yPos + 6);
     
     // Calculate address start position based on customer name height
@@ -506,12 +522,20 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     doc.text('Party Address :', 4, addressStartY);
     doc.setFont('helvetica', 'normal');
     
-    // Combine address and contact
+    // Combine address and contact - CLEAN DATA
     const address = order.shippingAddress || order.billingAddress || '';
     const mobile = order.mobile;
-    const fullAddress = `${address}\nContact : ${mobile}`;
     
-    const addressLines = doc.splitTextToSize(fullAddress, 44); // Limit width to 44mm (stays within border)
+    // Clean the address - remove undefined, null, empty strings
+    const cleanAddress = address
+      .split(',')
+      .map(part => part.trim())
+      .filter(part => part && part !== 'undefined' && part !== 'null' && part.length > 0)
+      .join(', ');
+    
+    const fullAddress = `${cleanAddress}\nContact : ${mobile}`;
+    
+    const addressLines = doc.splitTextToSize(fullAddress, 42); // Limit width to 42mm (stays within border)
     doc.text(addressLines, 4, addressStartY + 3);
 
     // Right side - all inline
@@ -565,7 +589,6 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     const qtyLines = [];
     
     boxItems.forEach((item) => {
-      // Format: "Product Name - SKU - ₹MRP"
       const productText = formatProductDetails(item);
       
       // Use 58mm for wrapping (column is 66mm, need more margin to stay within borders)
@@ -575,9 +598,18 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
       qtyLines.push(item.packingQty.toString());
     });
 
-    // Calculate total lines
-    const totalLines = productLines.reduce((sum, lines) => sum + lines.length, 0);
-    const rowHeight = Math.max(totalLines * 2.2 + (productLines.length - 1) * 1.5, 6);
+    // DYNAMIC row height calculation based on actual content
+    // Calculate the maximum height needed for all products
+    let maxProductHeight = 0;
+    productLines.forEach((lines) => {
+      const height = lines.length * 2.2; // 2.2mm per line for stickers
+      if (height > maxProductHeight) maxProductHeight = height;
+    });
+    
+    // Add spacing between products and minimum padding
+    const spacingBetweenProducts = (productLines.length - 1) * 1.5; // 1.5mm between each product
+    const minPadding = 4; // Minimum 4mm top+bottom padding
+    const rowHeight = Math.max(maxProductHeight + spacingBetweenProducts + minPadding, 10);
 
     // Draw cell borders
     colWidths.forEach((width, i) => {
@@ -589,23 +621,23 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     doc.setFontSize(6.5);
     doc.text(boxNo.toString(), colX[0] + colWidths[0]/2, yPos + rowHeight/2 + 1, { align: 'center' });
     
-    // Product details - properly wrapped
+    // Product details - properly wrapped with spacing
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(5);
-    let lineYPos = yPos + 2.2;
+    let lineYPos = yPos + 3; // Start 3mm from top
     productLines.forEach((wrappedLines, index) => {
       doc.text(wrappedLines, colX[1] + 1, lineYPos);
-      lineYPos += wrappedLines.length * 2.2;
+      lineYPos += wrappedLines.length * 2.2; // Move down by line count
       if (index < productLines.length - 1) {
         lineYPos += 1.5; // Space between products
       }
     });
     
-    // UOM - aligned with each product
-    lineYPos = yPos + 2.2;
+    // UOM - aligned with each product center
+    lineYPos = yPos + 3;
     uomLines.forEach((uom, index) => {
       const productLineCount = productLines[index].length;
-      const uomYPos = lineYPos + (productLineCount * 2.2) / 2;
+      const uomYPos = lineYPos + (productLineCount * 2.2) / 2; // Center vertically
       doc.text(uom, colX[2] + colWidths[2]/2, uomYPos, { align: 'center' });
       lineYPos += productLineCount * 2.2;
       if (index < uomLines.length - 1) {
@@ -613,12 +645,12 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
       }
     });
     
-    // Quantity - aligned with each product
+    // Quantity - aligned with each product center, bold
     doc.setFont('helvetica', 'bold');
-    lineYPos = yPos + 2.2;
+    lineYPos = yPos + 3;
     qtyLines.forEach((qty, index) => {
       const productLineCount = productLines[index].length;
-      const qtyYPos = lineYPos + (productLineCount * 2.2) / 2;
+      const qtyYPos = lineYPos + (productLineCount * 2.2) / 2; // Center vertically
       doc.text(qty, colX[3] + colWidths[3]/2, qtyYPos, { align: 'center' });
       lineYPos += productLineCount * 2.2;
       if (index < qtyLines.length - 1) {
