@@ -239,18 +239,32 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
   doc.text('Party Address :', 4, addressLabelY);
   doc.setFont('helvetica', 'normal');
   
-  // Combine address and contact with line break - CLEAN DATA
-  const address = order.shippingAddress || order.billingAddress || 'N/A';
+  // Get and THOROUGHLY clean the address
+  const rawAddress = order.shippingAddress || order.billingAddress || 'N/A';
   const mobile = order.mobile || 'N/A';
   
-  // Clean the address - remove undefined, null, empty strings
-  const cleanAddress = address
-    .split(',')
+  // Split by various separators and clean
+  const cleanAddress = rawAddress
+    .split(/[,\n]/) // Split by comma or newline
     .map(part => part.trim())
-    .filter(part => part && part !== 'undefined' && part !== 'null' && part.length > 0)
+    .filter(part => {
+      // Remove empty, undefined, null, and common junk
+      if (!part || part.length === 0) return false;
+      if (part === 'undefined' || part === 'null' || part === 'N/A') return false;
+      // Remove standalone numbers (like pin codes appearing separately)
+      if (/^\d+$/.test(part)) return false;
+      // Remove "Contact :" or "Contact No." entries (we'll add it once at the end)
+      if (part.toLowerCase().startsWith('contact')) return false;
+      // Remove "E-Mail :" entries
+      if (part.toLowerCase().startsWith('e-mail')) return false;
+      // Remove "State Name :" entries (usually redundant)
+      if (part.toLowerCase().startsWith('state name')) return false;
+      return true;
+    })
     .join(', ');
   
-  const fullAddress = `${cleanAddress}\nContact No. : ${mobile}`;
+  // Add contact ONCE at the end
+  const fullAddress = cleanAddress !== 'N/A' && cleanAddress ? `${cleanAddress}\nContact No. : ${mobile}` : `Contact No. : ${mobile}`;
   
   // Wider text area for address (use 44mm to stay within 49.5mm border)
   const addressLines = doc.splitTextToSize(fullAddress, 44);
@@ -525,18 +539,31 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     doc.text('Party Address :', 4, addressStartY);
     doc.setFont('helvetica', 'normal');
     
-    // Combine address and contact - CLEAN DATA
-    const address = order.shippingAddress || order.billingAddress || '';
-    const mobile = order.mobile;
+    // Get and THOROUGHLY clean the address
+    const rawAddress = order.shippingAddress || order.billingAddress || '';
     
-    // Clean the address - remove undefined, null, empty strings
-    const cleanAddress = address
-      .split(',')
+    // Split by various separators and clean
+    const cleanAddress = rawAddress
+      .split(/[,\n]/) // Split by comma or newline
       .map(part => part.trim())
-      .filter(part => part && part !== 'undefined' && part !== 'null' && part.length > 0)
+      .filter(part => {
+        // Remove empty, undefined, null, and common junk
+        if (!part || part.length === 0) return false;
+        if (part === 'undefined' || part === 'null') return false;
+        // Remove standalone numbers (like pin codes appearing separately)
+        if (/^\d+$/.test(part)) return false;
+        // Remove "Contact :" entries (we'll add it once at the end)
+        if (part.toLowerCase().startsWith('contact')) return false;
+        // Remove "E-Mail :" entries
+        if (part.toLowerCase().startsWith('e-mail')) return false;
+        // Remove "State Name :" entries (usually redundant)
+        if (part.toLowerCase().startsWith('state name')) return false;
+        return true;
+      })
       .join(', ');
     
-    const fullAddress = `${cleanAddress}\nContact : ${mobile}`;
+    // Add contact ONCE at the end
+    const fullAddress = cleanAddress ? `${cleanAddress}\nContact : ${order.mobile}` : `Contact : ${order.mobile}`;
     
     const addressLines = doc.splitTextToSize(fullAddress, 42); // Limit width to 42mm (stays within border)
     doc.text(addressLines, 4, addressStartY + 3);
