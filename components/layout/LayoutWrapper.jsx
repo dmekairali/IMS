@@ -3,8 +3,8 @@
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import BottomNav from './BottomNav';
-import Header from './Header';
 import LoadingSpinner from '../common/LoadingSpinner';
+import OfflineIndicator from '../common/OfflineIndicator';
 
 export default function LayoutWrapper({ children }) {
   const pathname = usePathname();
@@ -27,10 +27,15 @@ export default function LayoutWrapper({ children }) {
   
   return (
     <>
-      {!isLoginPage && user && <Header />}
+      {/* Offline Indicator - shows at top when offline */}
+      {!isLoginPage && user && <OfflineIndicator />}
+      
+      {/* Main Content */}
       <main className={!isLoginPage && user ? "min-h-screen pb-16" : "min-h-screen"}>
         {children}
       </main>
+      
+      {/* Bottom Navigation */}
       {!isLoginPage && user && <BottomNav />}
     </>
   );
