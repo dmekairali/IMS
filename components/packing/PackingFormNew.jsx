@@ -15,6 +15,10 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
   });
 
   const [generating, setGenerating] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [generatedLinks, setGeneratedLinks] = useState({ packingListLink: '', stickerLink: '' });
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleBoxNoChange = (index, value) => {
     const newItems = [...packingItems];
@@ -38,6 +42,8 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
     if (packingItems.length === 0) return;
 
     setGenerating(true);
+    setShowErrorModal(false);
+    setErrorMessage('');
 
     try {
       const response = await fetch('/api/packing/generate', {
@@ -56,22 +62,26 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
 
       const data = await response.json();
 
-      alert(`✓ Packing documents generated successfully!
-
-📄 Packing List: ${data.packingListLink}
-🏷️ Stickers: ${data.stickerLink}
-
-Links have been saved to DispatchData sheet.`);
-
-      if (onSuccess) {
-        onSuccess();
-      }
+      // Show success modal with links
+      setGeneratedLinks({
+        packingListLink: data.packingListLink,
+        stickerLink: data.stickerLink
+      });
+      setShowSuccessModal(true);
 
     } catch (error) {
       console.error('Error generating packing documents:', error);
-      alert(`Error: ${error.message}`);
+      setErrorMessage(error.message);
+      setShowErrorModal(true);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    if (onSuccess) {
+      onSuccess();
     }
   };
 
@@ -79,6 +89,7 @@ Links have been saved to DispatchData sheet.`);
   const isCompleted = order.hasPacking;
 
   return (
+    <>
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Order Details Section */}
       <div className="p-6 border-b border-gray-200">
@@ -281,5 +292,227 @@ Links have been saved to DispatchData sheet.`);
         </div>
       )}
     </div>
+
+    {/* Loading Modal */}
+    {generating && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black bg-opacity-50" />
+        
+        {/* Modal Content */}
+        <div className="relative bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl">
+          {/* Animated Icon */}
+          <div className="flex justify-center mb-6">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="w-10 h-10 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Title */}
+          <h3 className="text-xl font-bold text-gray-800 text-center mb-2">
+            Generating Documents
+          </h3>
+          
+          <p className="text-sm text-gray-600 text-center mb-6">
+            Please wait while we create your packing documents and upload them to Google Drive...
+          </p>
+
+          {/* Progress Steps */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 bg-teal-600 rounded-full flex items-center justify-center animate-pulse">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <p className="text-sm text-gray-700">Creating packing list PDF</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 bg-teal-600 rounded-full flex items-center justify-center animate-pulse" style={{ animationDelay: '0.2s' }}>
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <p className="text-sm text-gray-700">Creating stickers PDF</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 bg-teal-600 rounded-full flex items-center justify-center animate-pulse" style={{ animationDelay: '0.4s' }}>
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <p className="text-sm text-gray-700">Uploading to Google Drive</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 bg-teal-600 rounded-full flex items-center justify-center animate-pulse" style={{ animationDelay: '0.6s' }}>
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <p className="text-sm text-gray-700">Saving links to sheet</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Success Modal */}
+    {showSuccessModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-slide-up">
+        {/* Backdrop */}
+        <div 
+          className="absolute inset-0 bg-black bg-opacity-50"
+          onClick={handleSuccessModalClose}
+        />
+        
+        {/* Modal Content */}
+        <div className="relative bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+          {/* Success Icon */}
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Title */}
+          <h3 className="text-xl font-bold text-gray-800 text-center mb-2">
+            Documents Generated Successfully!
+          </h3>
+          
+          <p className="text-sm text-gray-600 text-center mb-6">
+            Your packing documents have been created and saved to Google Drive.
+          </p>
+
+          {/* Document Links */}
+          <div className="space-y-3 mb-6">
+            <a
+              href={generatedLinks.packingListLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg hover:bg-blue-100 transition-colors group"
+            >
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800">Packing List</p>
+                <p className="text-xs text-gray-500">Click to view PDF</p>
+              </div>
+              <svg className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+
+            <a
+              href={generatedLinks.stickerLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 bg-purple-50 border-2 border-purple-200 rounded-lg hover:bg-purple-100 transition-colors group"
+            >
+              <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800">Packing Stickers</p>
+                <p className="text-xs text-gray-500">Click to view PDF</p>
+              </div>
+              <svg className="w-5 h-5 text-purple-600 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+          </div>
+
+          {/* Info Banner */}
+          <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 mb-6">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-xs text-teal-800">
+                Links have been saved to the DispatchData sheet for future reference.
+              </p>
+            </div>
+          </div>
+
+          {/* Close Button */}
+          <button
+            onClick={handleSuccessModalClose}
+            className="w-full px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold rounded-lg hover:from-teal-700 hover:to-teal-800 transition-all shadow-sm"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Error Modal */}
+    {showErrorModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-slide-up">
+        {/* Backdrop */}
+        <div 
+          className="absolute inset-0 bg-black bg-opacity-50"
+          onClick={() => setShowErrorModal(false)}
+        />
+        
+        {/* Modal Content */}
+        <div className="relative bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+          {/* Error Icon */}
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Title */}
+          <h3 className="text-xl font-bold text-gray-800 text-center mb-2">
+            Generation Failed
+          </h3>
+          
+          <p className="text-sm text-gray-600 text-center mb-6">
+            There was an error generating your packing documents.
+          </p>
+
+          {/* Error Message */}
+          <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-red-800 font-mono break-words">
+              {errorMessage}
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowErrorModal(false)}
+              className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => {
+                setShowErrorModal(false);
+                generatePackingDocuments();
+              }}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-sm"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
