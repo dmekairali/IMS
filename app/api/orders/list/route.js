@@ -75,7 +75,11 @@ export async function GET(request) {
       // Get SKU items for this order
       const orderItems = formDataRows
         .slice(1)
-        .filter(formRow => formRow[formOrderIdCol] === orderId)
+        // Now filters out products where qty = 0
+        .filter(formRow => {
+        const qty = parseInt(formRow[qtyCol] || '0');
+        return formRow[formOrderIdCol] === orderId && qty > 0;  // ✅ Only qty > 0
+        })
         .map(formRow => ({
           productName: formRow[productsCol] || '',
           sku: formRow[skuCol] || '',
