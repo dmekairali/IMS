@@ -127,7 +127,9 @@ function formatProductDetails(item) {
   // Extract product name (before first " - ")
   const parts = item.productName.split(' - ');
   const productName = parts[0].trim();
-  
+
+   return productName;
+  /*
   // Get SKU - use item.sku or extract from product name if blank
   let sku = item.sku || '';
   if (!sku && parts.length > 1) {
@@ -155,6 +157,7 @@ function formatProductDetails(item) {
   } else {
     return productName;
   }
+  */
 }
 
 async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
