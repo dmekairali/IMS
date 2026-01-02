@@ -10,23 +10,23 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
       productName: product.productName || '',
       package: product.package || '',
       orderedQty: parseInt(product.quantity) || 0,
-      packingQty: parseInt(product.quantity) || 0,
       boxNo: 1,
     }));
   });
 
   const [generating, setGenerating] = useState(false);
 
-  const handlePackingQtyChange = (index, value) => {
-    const newItems = [...packingItems];
-    newItems[index].packingQty = parseInt(value) || 0;
-    setPackingItems(newItems);
-  };
-
   const handleBoxNoChange = (index, value) => {
     const newItems = [...packingItems];
     newItems[index].boxNo = parseInt(value) || 1;
     setPackingItems(newItems);
+  };
+
+  // Helper function to display only product name (before first " - ")
+  const getDisplayName = (fullName) => {
+    if (!fullName) return '';
+    const parts = fullName.split(' - ');
+    return parts[0].trim();
   };
 
   const totalBoxes = useMemo(() => {
@@ -206,11 +206,8 @@ Links have been saved to DispatchData sheet.`);
                   <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm w-24">
                     Package
                   </th>
-                  <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm w-24">
-                    Ordered QTY
-                  </th>
                   <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm bg-teal-600 text-white w-24">
-                    Packing QTY
+                    Qty
                   </th>
                   <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm bg-teal-600 text-white w-24">
                     Box No
@@ -221,7 +218,7 @@ Links have been saved to DispatchData sheet.`);
                 {packingItems.map((item, index) => (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="border border-gray-300 px-3 py-2 text-sm">
-                      {item.productName}
+                      {getDisplayName(item.productName)}
                       <div className="text-xs text-gray-500 mt-1">{item.sku}</div>
                     </td>
                     <td className="border border-gray-300 px-3 py-2 text-center text-sm">
@@ -229,17 +226,6 @@ Links have been saved to DispatchData sheet.`);
                     </td>
                     <td className="border border-gray-300 px-3 py-2 text-center text-sm font-semibold">
                       {item.orderedQty}
-                    </td>
-                    <td className="border border-gray-300 px-3 py-2 text-center">
-                      <input
-                        type="number"
-                        min="0"
-                        max={item.orderedQty}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-center"
-                        value={item.packingQty}
-                        onChange={(e) => handlePackingQtyChange(index, e.target.value)}
-                        disabled={isCompleted}
-                      />
                     </td>
                     <td className="border border-gray-300 px-3 py-2 text-center">
                       <input
