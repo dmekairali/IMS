@@ -122,42 +122,12 @@ export async function POST(request) {
   }
 }
 
-// Helper function to extract product name, SKU, and MRP
+// Helper function to extract product name only (before first " - ")
 function formatProductDetails(item) {
   // Extract product name (before first " - ")
   const parts = item.productName.split(' - ');
   const productName = parts[0].trim();
-
-   return productName;
-  /*
-  // Get SKU - use item.sku or extract from product name if blank
-  let sku = item.sku || '';
-  if (!sku && parts.length > 1) {
-    // If SKU is blank, try to get it from second part of product name
-    sku = parts[1].trim();
-  }
-  
-  // Extract MRP from the full product name
-  // Format: "Name - SKU - Size - ₹Price - other info"
-  let mrp = '';
-  for (let i = 0; i < parts.length; i++) {
-    if (parts[i].includes('₹') || parts[i].includes('Rs')) {
-      mrp = parts[i].trim();
-      break;
-    }
-  }
-  
-  // Format: "Product Name - SKU - ₹MRP"
-  if (sku && mrp) {
-    return `${productName} - ${sku} - ${mrp}`;
-  } else if (sku) {
-    return `${productName} - ${sku}`;
-  } else if (mrp) {
-    return `${productName} - ${mrp}`;
-  } else {
-    return productName;
-  }
-  */
+  return productName;
 }
 
 async function addLogoToPDF(doc, x = 15, y = 10, width = 30, height = 15) {
@@ -366,8 +336,8 @@ async function generatePackingListPDF(order, packingItems, jsPDF) {
       // Format: "Product Name - SKU - ₹MRP"
       const productText = formatProductDetails(item);
       
-      // Use 60mm for wrapping (column is 66mm, need margin)
-      const wrapped = doc.splitTextToSize(productText, 60);
+      // Use 58mm for wrapping (column is 66mm, need more margin to stay within borders)
+      const wrapped = doc.splitTextToSize(productText, 58);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
       qtyLines.push(item.packingQty.toString());
@@ -521,14 +491,19 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     doc.setFont('helvetica', 'bold');
     doc.text('To', 4, yPos + 2.5);
     
-    // Party Name - inline
+    // Party Name - inline with wrapping
     doc.text('Party Name : ', 4, yPos + 6);
     doc.setFont('helvetica', 'normal');
-    doc.text(order.customerName, 20, yPos + 6);
+    const customerNameLines = doc.splitTextToSize(order.customerName, 40); // Limit width to 40mm
+    doc.text(customerNameLines, 20, yPos + 6);
+    
+    // Calculate address start position based on customer name height
+    const nameHeight = customerNameLines.length * 2.5;
+    const addressStartY = yPos + 6 + nameHeight + 2;
     
     // Party Address + Contact merged area
     doc.setFont('helvetica', 'bold');
-    doc.text('Party Address :', 4, yPos + 10);
+    doc.text('Party Address :', 4, addressStartY);
     doc.setFont('helvetica', 'normal');
     
     // Combine address and contact
@@ -536,8 +511,8 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
     const mobile = order.mobile;
     const fullAddress = `${address}\nContact : ${mobile}`;
     
-    const addressLines = doc.splitTextToSize(fullAddress, 46);
-    doc.text(addressLines, 4, yPos + 13);
+    const addressLines = doc.splitTextToSize(fullAddress, 44); // Limit width to 44mm (stays within border)
+    doc.text(addressLines, 4, addressStartY + 3);
 
     // Right side - all inline
     doc.setFont('helvetica', 'bold');
@@ -593,8 +568,8 @@ async function generateStickersPDF(order, packingItems, jsPDF) {
       // Format: "Product Name - SKU - ₹MRP"
       const productText = formatProductDetails(item);
       
-      // Use 60mm for wrapping (column is 66mm, need margin)
-      const wrapped = doc.splitTextToSize(productText, 60);
+      // Use 58mm for wrapping (column is 66mm, need more margin to stay within borders)
+      const wrapped = doc.splitTextToSize(productText, 58);
       productLines.push(wrapped);
       uomLines.push(item.package || 'N/A');
       qtyLines.push(item.packingQty.toString());
