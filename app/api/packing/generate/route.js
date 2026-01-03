@@ -84,12 +84,18 @@ export async function POST(request) {
     );
     console.log('✅ Stickers uploaded:', stickersFile.webViewLink);
 
-    // Update DispatchData sheet with links
+    // Calculate total boxes and box numbers from packing items
+    const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
+    const boxNumbers = Array.from({ length: totalBoxes }, (_, i) => i + 1).join(',');
+
+    // Update DispatchData sheet with links and box info
     console.log('📊 Updating DispatchData sheet...');
     await updateDispatchDataWithLinks(
       order.orderId,
       packingListFile.webViewLink,
-      stickersFile.webViewLink
+      stickersFile.webViewLink,
+      boxNumbers,
+      totalBoxes
     );
     console.log('✅ Sheet updated successfully');
 
@@ -98,7 +104,7 @@ export async function POST(request) {
     const { logPackingToFormData } = await import('@/lib/logPackingToFormData');
     
     // Get total boxes from packing items
-    const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
+   // const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
     
     await logPackingToFormData({
       orderId: order.orderId,
