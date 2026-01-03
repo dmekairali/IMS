@@ -66,11 +66,25 @@ export default function PackingPage() {
     setSelectedOrder(null);
   };
 
-  const handleSuccess = () => {
-    // Don't auto-refresh, just close the form
+  const handleSuccess = (orderId, packingListLink, stickerLink) => {
+    // Optimistically update the order in the list
+    setOrders(prevOrders => 
+      prevOrders.map(order => 
+        order.orderId === orderId 
+          ? {
+              ...order,
+              hasPacking: true,
+              packingListLink: packingListLink,
+              stickerLink: stickerLink
+            }
+          : order
+      )
+    );
+
+    // Close the form
     setSelectedOrder(null);
-    // Optionally show a success message
-    console.log('✅ Packing documents generated successfully');
+    
+    console.log(`✅ Order ${orderId} updated to completed status (client-side)`);
   };
 
   if (loading) {
