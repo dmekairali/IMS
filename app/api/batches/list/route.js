@@ -1,18 +1,14 @@
-// app/api/batches/list/route.js - UPDATED VERSION - Replace your existing file
+// app/api/batches/list/route.js - SKU-based
 import { getSheets, getBatchCache, setBatchCache } from '@/lib/googleSheets';
 
 export async function GET(request) {
   try {
-    console.log('📥 Batches list API called');
-    
     // Check cache first
     const cached = getBatchCache();
     if (cached) {
-      console.log('✅ Returning cached batches');
       return Response.json({ batches: cached, fromCache: true });
     }
 
-    console.log('🔄 Cache miss - fetching fresh data from Google Sheets...');
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_BATCHES;
 
@@ -22,9 +18,8 @@ export async function GET(request) {
     });
 
     const rows = response.data.values || [];
-    console.log(`📊 Retrieved ${rows.length} batch rows from Google Sheets`);
     
-    // Columns: Batch Number, Batch Description, Description Name, Size, SKU, IN, OUT, Remaining, BatchDate, ExpiryDate
+    // Columns: Batch Number, Batch Description, Description Name, Size, SKU, IN, OUT, Remaining, BatchDate
     const batches = rows.map(row => ({
       batchNo: row[0],
       batchDescription: row[1],
@@ -41,10 +36,9 @@ export async function GET(request) {
     // Cache the data
     setBatchCache(batches);
 
-    console.log(`✅ Returning ${batches.length} FRESH batches from Google Sheets`);
     return Response.json({ batches, fromCache: false });
   } catch (error) {
-    console.error('❌ Error fetching batches:', error);
+    console.error('Error fetching batches:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
