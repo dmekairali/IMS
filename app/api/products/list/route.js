@@ -1,13 +1,8 @@
-// app/api/products/list/route.js - UPDATED VERSION - Replace your existing file
+// app/api/products/list/route.js - Match existing project structure
 import { getSheets } from '@/lib/googleSheets';
-
-export const dynamic = 'force-dynamic'; // Disable caching at Next.js level
-export const revalidate = 0; // Don't cache
 
 export async function GET(request) {
   try {
-    console.log('📥 Products list API called');
-    
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
 
@@ -20,7 +15,6 @@ export async function GET(request) {
     const rows = response.data.values || [];
     
     if (rows.length === 0) {
-      console.log('⚠️ No products found in All Form Data');
       return Response.json({ orders: [], products: [] });
     }
 
@@ -52,17 +46,14 @@ export async function GET(request) {
         total: row[totalCol] || '0',
       }));
 
-    console.log(`✅ Returning ${products.length} products (FRESH from Google Sheets)`);
-
     return Response.json({
       success: true,
       products,
       count: products.length,
-      timestamp: new Date().toISOString()
     });
 
   } catch (error) {
-    console.error('❌ Error fetching products:', error);
+    console.error('Error fetching products:', error);
     return Response.json(
       {
         success: false,
