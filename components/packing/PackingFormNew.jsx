@@ -81,7 +81,7 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
     if (onSuccess) {
-      onSuccess();
+      onSuccess(); // Just close form, don't trigger refresh
     }
   };
 
@@ -440,7 +440,7 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-xs text-teal-800">
-                Links have been saved to the DispatchData sheet for future reference.
+                Documents saved successfully. Click the refresh button to see updated status in the list.
               </p>
             </div>
           </div>
