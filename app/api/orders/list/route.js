@@ -1,13 +1,8 @@
-// app/api/orders/list/route.js - UPDATED VERSION - Replace your existing file
+// app/api/orders/list/route.js - Include packing status
 import { getSheets } from '@/lib/googleSheets';
-
-export const dynamic = 'force-dynamic'; // Disable caching at Next.js level
-export const revalidate = 0; // Don't cache
 
 export async function GET(request) {
   try {
-    console.log('📥 Orders list API called');
-    
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
 
@@ -27,7 +22,6 @@ export async function GET(request) {
 
     const dispatchRows = dispatchDataResponse.data.values || [];
     if (dispatchRows.length === 0) {
-      console.log('⚠️ No orders found in DispatchData');
       return Response.json({ orders: [] });
     }
 
@@ -56,7 +50,6 @@ export async function GET(request) {
 
     const formDataRows = formDataResponse.data.values || [];
     if (formDataRows.length === 0) {
-      console.log('⚠️ No products found in All Form Data');
       return Response.json({ orders: [] });
     }
 
@@ -82,10 +75,10 @@ export async function GET(request) {
       // Get SKU items for this order
       const orderItems = formDataRows
         .slice(1)
-        // Filter out products where qty = 0
+        // Now filters out products where qty = 0
         .filter(formRow => {
-          const qty = parseInt(formRow[qtyCol] || '0');
-          return formRow[formOrderIdCol] === orderId && qty > 0;
+        const qty = parseInt(formRow[qtyCol] || '0');
+        return formRow[formOrderIdCol] === orderId && qty > 0;  // ✅ Only qty > 0
         })
         .map(formRow => ({
           productName: formRow[productsCol] || '',
@@ -124,14 +117,9 @@ export async function GET(request) {
       });
     }
 
-    console.log(`✅ Returning ${orders.length} orders (FRESH from Google Sheets)`);
-    
-    return Response.json({ 
-      orders,
-      timestamp: new Date().toISOString() // Add timestamp to response
-    });
+    return Response.json({ orders });
   } catch (error) {
-    console.error('❌ Error fetching orders:', error);
+    console.error('Error fetching orders:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
