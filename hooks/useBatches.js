@@ -1,4 +1,4 @@
-// hooks/useBatches.js - Client-side cache
+// hooks/useBatches.js - Client-side cache with force refresh support
 'use client';
 import { useState, useCallback, useEffect } from 'react';
 
@@ -21,6 +21,7 @@ export function useBatches() {
   }, []);
 
   const loadBatches = useCallback(async (forceRefresh = false) => {
+    // If we have cache and not forcing refresh, use it
     if (globalBatchCache && !forceRefresh) {
       return globalBatchCache;
     }
@@ -29,7 +30,18 @@ export function useBatches() {
     setError(null);
     
     try {
-      const response = await fetch('/api/batches/list');
+      // Add refresh parameter if forcing refresh
+      const url = forceRefresh 
+        ? '/api/batches/list?refresh=true'
+        : '/api/batches/list';
+      
+      console.log(`🔍 Fetching batches (forceRefresh: ${forceRefresh})...`);
+      const response = await fetch(url, {
+        cache: 'no-store', // Client-side cache control
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       
       if (!response.ok) {
         throw new Error('Failed to fetch batches');
@@ -37,6 +49,8 @@ export function useBatches() {
       
       const data = await response.json();
       globalBatchCache = data.batches || [];
+      
+      console.log(`✅ Loaded ${globalBatchCache.length} batches (fromCache: ${data.fromCache})`);
       
       // Notify all subscribers
       cacheSubscribers.forEach(sub => sub(globalBatchCache));
