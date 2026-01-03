@@ -62,11 +62,13 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
 
       const data = await response.json();
 
-      // Show success modal with links
+      // Store links
       setGeneratedLinks({
         packingListLink: data.packingListLink,
         stickerLink: data.stickerLink
       });
+      
+      // Show success modal
       setShowSuccessModal(true);
 
     } catch (error) {
@@ -80,8 +82,10 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
 
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
+    
+    // Pass orderId and links to parent for optimistic update
     if (onSuccess) {
-      onSuccess(); // Just close form, don't trigger refresh
+      onSuccess(order.orderId, generatedLinks.packingListLink, generatedLinks.stickerLink);
     }
   };
 
@@ -434,13 +438,13 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
           </div>
 
           {/* Info Banner */}
-          <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 mb-6">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
             <div className="flex items-start gap-2">
-              <svg className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-xs text-teal-800">
-                Documents saved successfully. Click the refresh button to see updated status in the list.
+              <p className="text-xs text-green-800">
+                <strong>Order moved to completed!</strong> You can see it in the completed section now.
               </p>
             </div>
           </div>
