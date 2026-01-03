@@ -1,4 +1,4 @@
-// components/orders/PendingOrdersList.jsx - UPDATED VERSION - Replace your existing file
+// components/orders/PendingOrdersList.jsx - Load batches once
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
@@ -10,12 +10,11 @@ import { useBatches } from '@/hooks/useBatches';
 
 export default function PendingOrdersList() {
   const { orders, loading, error, refreshOrders } = useOrders();
-  const { loadBatches, getBatchesBySKU, clearCache } = useBatches();
+  const { loadBatches, getBatchesBySKU } = useBatches();
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [ordersWithStockStatus, setOrdersWithStockStatus] = useState([]);
   const [checkingStock, setCheckingStock] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     initializePage();
@@ -28,9 +27,7 @@ export default function PendingOrdersList() {
   }, [orders]);
 
   async function initializePage() {
-    // On page load, always fetch fresh data
-    console.log('🚀 Initializing page - loading fresh data...');
-    await loadBatches(true); // Force refresh on page load
+    await loadBatches();
   }
 
   function checkAllOrdersStock() {
@@ -64,43 +61,6 @@ export default function PendingOrdersList() {
     setCheckingStock(false);
   }
 
-  const handleFullRefresh = async () => {
-    setRefreshing(true);
-    try {
-      console.log('🔄 Starting FULL REFRESH (clearing all caches)...');
-      
-      // Step 1: Clear client-side cache
-      console.log('  Step 1: Clearing client cache...');
-      clearCache();
-      
-      // Step 2: Clear server-side cache
-      console.log('  Step 2: Clearing server cache...');
-      try {
-        await fetch('/api/batches/clear-cache', { method: 'POST' });
-      } catch (err) {
-        console.warn('  Warning: Could not clear server cache:', err.message);
-      }
-      
-      // Step 3: Force fresh batch data load
-      console.log('  Step 3: Loading fresh batch data from Google Sheets...');
-      await loadBatches(true);
-      
-      // Step 4: Refresh orders
-      console.log('  Step 4: Refreshing orders...');
-      await refreshOrders();
-      
-      // Step 5: Recheck stock with fresh data
-      console.log('  Step 5: Rechecking stock status...');
-      checkAllOrdersStock();
-      
-      console.log('✅ FULL REFRESH COMPLETE!');
-    } catch (error) {
-      console.error('❌ Refresh error:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   const filteredOrders = ordersWithStockStatus.filter(order => {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -115,7 +75,7 @@ export default function PendingOrdersList() {
   });
 
   if (loading || checkingStock) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} onRetry={handleFullRefresh} />;
+  if (error) return <ErrorMessage message={error} onRetry={refreshOrders} />;
 
   const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch).length;
 
@@ -174,7 +134,7 @@ export default function PendingOrdersList() {
             <OrderCard 
               key={order.orderId} 
               order={order} 
-              onRefresh={handleFullRefresh}
+              onRefresh={refreshOrders}
               canDispatch={order.canDispatch}
               shortageInfo={order.shortageInfo}
             />
@@ -184,26 +144,17 @@ export default function PendingOrdersList() {
 
       <div className="fixed bottom-24 right-4">
         <button
-          onClick={handleFullRefresh}
-          disabled={refreshing}
-          className={`relative bg-blue-600 text-white p-4 rounded-full shadow-lg transition-all ${
-            refreshing ? 'opacity-75 cursor-not-allowed' : 'active:scale-95'
-          }`}
-          aria-label="Refresh orders and batches"
+          onClick={async () => {
+            await loadBatches(true);
+            refreshOrders();
+            checkAllOrdersStock();
+          }}
+          className="bg-blue-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform"
+          aria-label="Refresh orders"
         >
-          <svg 
-            className={`w-6 h-6 ${refreshing ? 'animate-spin' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          {refreshing && (
-            <span className="absolute -top-12 right-0 bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
-              Refreshing from Sheets...
-            </span>
-          )}
         </button>
       </div>
     </div>
