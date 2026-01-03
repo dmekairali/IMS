@@ -1,10 +1,18 @@
 // app/api/orders/list/route.js - Include packing status
 import { getSheets } from '@/lib/googleSheets';
+
 // Force dynamic rendering - prevent Next.js caching
-   export const dynamic = 'force-dynamic';
-   export const revalidate = 0;
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(request) {
+  // Set cache control headers
+  const headers = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  };
+
   try {
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
@@ -25,12 +33,12 @@ export async function GET(request) {
 
     const dispatchRows = dispatchDataResponse.data.values || [];
     if (dispatchRows.length === 0) {
-      return Response.json({ orders: [] });
+      return Response.json({ orders: [] }, { headers });
     }
 
     // Parse headers
-    const headers = dispatchRows[0];
-    const getColumnIndex = (name) => headers.findIndex(h => h === name);
+    const headers_data = dispatchRows[0];
+    const getColumnIndex = (name) => headers_data.findIndex(h => h === name);
 
     const timestampCol = getColumnIndex('Timestamp');
     const orderIdCol = getColumnIndex('Oder ID'); // Note: "Oder ID" typo in sheet
@@ -53,7 +61,7 @@ export async function GET(request) {
 
     const formDataRows = formDataResponse.data.values || [];
     if (formDataRows.length === 0) {
-      return Response.json({ orders: [] });
+      return Response.json({ orders: [] }, { headers });
     }
 
     const formHeaders = formDataRows[0];
@@ -120,9 +128,11 @@ export async function GET(request) {
       });
     }
 
-    return Response.json({ orders });
+    console.log(`✅ Fetched ${orders.length} orders at ${new Date().toISOString()}`);
+
+    return Response.json({ orders }, { headers });
   } catch (error) {
     console.error('Error fetching orders:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message }, { status: 500, headers });
   }
 }
