@@ -188,7 +188,18 @@ function OrderListItem({ order, onSelect }) {
           </div>
 
           {/* Show packing slip links */}
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
+            {order.invoiceLink && (
+              <a 
+                href={order.invoiceLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+              >
+                📋 Invoice
+              </a>
+            )}
             {order.packingListLink && (
               <a 
                 href={order.packingListLink}
