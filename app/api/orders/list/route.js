@@ -1,5 +1,8 @@
 // app/api/orders/list/route.js - Include packing status
 import { getSheets } from '@/lib/googleSheets';
+// Force dynamic rendering - prevent Next.js caching
+   export const dynamic = 'force-dynamic';
+   export const revalidate = 0;
 
 export async function GET(request) {
   try {
