@@ -11,6 +11,7 @@ export default function PackingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -22,12 +23,22 @@ export default function PackingPage() {
       setError(null);
 
       // Fetch orders from DispatchData
-      const ordersResponse = await fetch('/api/orders/list');
+      const ordersResponse = await fetch('/api/orders/list', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       if (!ordersResponse.ok) throw new Error('Failed to fetch orders');
       const ordersData = await ordersResponse.json();
 
       // Fetch products from All Form Data
-      const productsResponse = await fetch('/api/products/list');
+      const productsResponse = await fetch('/api/products/list', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       if (!productsResponse.ok) throw new Error('Failed to fetch products');
       const productsData = await productsResponse.json();
 
@@ -41,6 +52,12 @@ export default function PackingPage() {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
+
   const handleOrderSelect = (order) => {
     setSelectedOrder(order);
   };
@@ -50,8 +67,10 @@ export default function PackingPage() {
   };
 
   const handleSuccess = () => {
+    // Don't auto-refresh, just close the form
     setSelectedOrder(null);
-    fetchData(); // Refresh the list
+    // Optionally show a success message
+    console.log('✅ Packing documents generated successfully');
   };
 
   if (loading) {
@@ -74,10 +93,30 @@ export default function PackingPage() {
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="max-w-6xl mx-auto p-4">
         {!selectedOrder ? (
-          <PackingOrdersList 
-            orders={orders} 
-            onSelectOrder={handleOrderSelect}
-          />
+          <>
+            <PackingOrdersList 
+              orders={orders} 
+              onSelectOrder={handleOrderSelect}
+            />
+            
+            {/* Floating Refresh Button */}
+            <div className="fixed bottom-24 right-4 z-10">
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="bg-teal-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Refresh packing list"
+              >
+                {refreshing ? (
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </>
         ) : (
           <PackingForm 
             order={selectedOrder}
