@@ -51,6 +51,7 @@ export async function GET(request) {
     const shippingAddressCol = getColumnIndex('Shipping Address');
     const packingListCol = getColumnIndex('Packing List');
     const stickerCol = getColumnIndex('Sticker');
+    const invoiceLinkCol = getColumnIndex('Invoice Link'); // ⭐ NEW
     const consignmentImageCol = getColumnIndex('Consignment Images Url'); // ⭐ NEW
 
     // 3. Get all SKU details from All Form Data
@@ -104,6 +105,7 @@ export async function GET(request) {
       const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantityOrdered, 0);
       const packingListLink = row[packingListCol] || '';
       const stickerLink = row[stickerCol] || '';
+      const invoiceLink = invoiceLinkCol !== -1 ? (row[invoiceLinkCol] || '') : ''; // ⭐ NEW
       const consignmentImageUrl = consignmentImageCol !== -1 ? (row[consignmentImageCol] || '') : ''; // ⭐ NEW
       const hasPacking = packingListLink !== '' && packingListLink !== undefined;
       const hasConsignmentImage = consignmentImageUrl !== '' && consignmentImageUrl !== undefined; // ⭐ NEW
@@ -122,6 +124,7 @@ export async function GET(request) {
         shippingAddress: row[shippingAddressCol] || '',
         packingListLink: packingListLink,
         stickerLink: stickerLink,
+        invoiceLink: invoiceLink, // ⭐ NEW
         consignmentImageUrl: consignmentImageUrl, // ⭐ NEW
         hasPacking: hasPacking,
         hasConsignmentImage: hasConsignmentImage, // ⭐ NEW
