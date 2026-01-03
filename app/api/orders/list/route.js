@@ -1,12 +1,11 @@
-// app/api/orders/list/route.js - Include packing status
+// app/api/orders/list/route.js - UPDATED VERSION
+// Include packing status and consignment image URL
 import { getSheets } from '@/lib/googleSheets';
 
-// Force dynamic rendering - prevent Next.js caching
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request) {
-  // Set cache control headers
   const headers = {
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
     'Pragma': 'no-cache',
@@ -28,7 +27,7 @@ export async function GET(request) {
     // 2. Get all orders from DispatchData
     const dispatchDataResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'DispatchData!A1:Z', // Get headers + data
+      range: 'DispatchData!A1:Z',
     });
 
     const dispatchRows = dispatchDataResponse.data.values || [];
@@ -41,7 +40,7 @@ export async function GET(request) {
     const getColumnIndex = (name) => headers_data.findIndex(h => h === name);
 
     const timestampCol = getColumnIndex('Timestamp');
-    const orderIdCol = getColumnIndex('Oder ID'); // Note: "Oder ID" typo in sheet
+    const orderIdCol = getColumnIndex('Oder ID');
     const clientNameCol = getColumnIndex('Name of Client');
     const mobileCol = getColumnIndex('Mobile');
     const invoiceAmountCol = getColumnIndex('Invoice Amount');
@@ -52,6 +51,7 @@ export async function GET(request) {
     const shippingAddressCol = getColumnIndex('Shipping Address');
     const packingListCol = getColumnIndex('Packing List');
     const stickerCol = getColumnIndex('Sticker');
+    const consignmentImageCol = getColumnIndex('Consignment Images Url'); // ⭐ NEW
 
     // 3. Get all SKU details from All Form Data
     const formDataResponse = await sheets.spreadsheets.values.get({
@@ -86,10 +86,9 @@ export async function GET(request) {
       // Get SKU items for this order
       const orderItems = formDataRows
         .slice(1)
-        // Now filters out products where qty = 0
         .filter(formRow => {
-        const qty = parseInt(formRow[qtyCol] || '0');
-        return formRow[formOrderIdCol] === orderId && qty > 0;  // ✅ Only qty > 0
+          const qty = parseInt(formRow[qtyCol] || '0');
+          return formRow[formOrderIdCol] === orderId && qty > 0;
         })
         .map(formRow => ({
           productName: formRow[productsCol] || '',
@@ -100,12 +99,14 @@ export async function GET(request) {
           total: parseFloat(formRow[totalCol] || '0')
         }));
 
-      if (orderItems.length === 0) continue; // Skip orders without items
+      if (orderItems.length === 0) continue;
 
       const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantityOrdered, 0);
       const packingListLink = row[packingListCol] || '';
       const stickerLink = row[stickerCol] || '';
+      const consignmentImageUrl = consignmentImageCol !== -1 ? (row[consignmentImageCol] || '') : ''; // ⭐ NEW
       const hasPacking = packingListLink !== '' && packingListLink !== undefined;
+      const hasConsignmentImage = consignmentImageUrl !== '' && consignmentImageUrl !== undefined; // ⭐ NEW
 
       orders.push({
         orderId: orderId,
@@ -121,10 +122,12 @@ export async function GET(request) {
         shippingAddress: row[shippingAddressCol] || '',
         packingListLink: packingListLink,
         stickerLink: stickerLink,
+        consignmentImageUrl: consignmentImageUrl, // ⭐ NEW
         hasPacking: hasPacking,
+        hasConsignmentImage: hasConsignmentImage, // ⭐ NEW
         items: orderItems,
         totalQuantity: totalQuantity,
-        rowIndex: i + 1 // For updating later
+        rowIndex: i + 1
       });
     }
 
