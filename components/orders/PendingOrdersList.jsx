@@ -1,4 +1,4 @@
-// components/orders/PendingOrdersList.jsx - Load batches once
+// components/orders/PendingOrdersList.jsx - Optimistic updates without refetch
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
@@ -14,6 +14,7 @@ export default function PendingOrdersList() {
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [ordersWithStockStatus, setOrdersWithStockStatus] = useState([]);
+  const [dispatchedOrderIds, setDispatchedOrderIds] = useState(new Set());
   const [checkingStock, setCheckingStock] = useState(true);
 
   useEffect(() => {
@@ -61,7 +62,20 @@ export default function PendingOrdersList() {
     setCheckingStock(false);
   }
 
-  const filteredOrders = ordersWithStockStatus.filter(order => {
+  // Handle optimistic dispatch - remove order from list immediately
+  const handleOrderDispatched = (orderId) => {
+    console.log('✅ Order dispatched optimistically:', orderId);
+    
+    // Add to dispatched set
+    setDispatchedOrderIds(prev => new Set([...prev, orderId]));
+    
+    // Note: We don't refetch orders - order just disappears from pending list
+  };
+
+  // Filter out dispatched orders from the list
+  const activeOrders = ordersWithStockStatus.filter(order => !dispatchedOrderIds.has(order.orderId));
+
+  const filteredOrders = activeOrders.filter(order => {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
     
@@ -77,7 +91,7 @@ export default function PendingOrdersList() {
   if (loading || checkingStock) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={refreshOrders} />;
 
-  const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch).length;
+  const outOfStockCount = activeOrders.filter(o => !o.canDispatch).length;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -125,7 +139,9 @@ export default function PendingOrdersList() {
       <div className="p-4 space-y-3">
         {filteredOrders.length === 0 ? (
           <EmptyState message={
-            filter === 'outofstock' 
+            dispatchedOrderIds.size > 0 && activeOrders.length === 0
+              ? 'All orders dispatched! 🎉'
+              : filter === 'outofstock' 
               ? 'No orders with stock shortage' 
               : 'No orders found'
           } />
@@ -134,7 +150,7 @@ export default function PendingOrdersList() {
             <OrderCard 
               key={order.orderId} 
               order={order} 
-              onRefresh={refreshOrders}
+              onDispatchSuccess={handleOrderDispatched}
               canDispatch={order.canDispatch}
               shortageInfo={order.shortageInfo}
             />
@@ -147,6 +163,7 @@ export default function PendingOrdersList() {
           onClick={async () => {
             await loadBatches(true);
             refreshOrders();
+            setDispatchedOrderIds(new Set()); // Clear dispatched list on manual refresh
             checkAllOrdersStock();
           }}
           className="bg-blue-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform"
