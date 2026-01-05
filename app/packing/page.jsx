@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import PackingOrdersList from '@/components/packing/PackingOrdersList';
 import PackingForm from '@/components/packing/PackingFormNew';
-import LoadingSpinner from '@/components/common/LoadingSpinner';
+import PackingConsignmentSkeleton from '@/components/common/PackingConsignmentSkeleton';
 import ErrorMessage from '@/components/common/ErrorMessage';
 import { useData } from '@/contexts/DataContext';
 
@@ -33,11 +33,7 @@ export default function PackingPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
+    return <PackingConsignmentSkeleton type="packing" />;
   }
 
   if (error) {
@@ -62,7 +58,7 @@ export default function PackingPage() {
             <div className="fixed bottom-24 right-4 z-10">
               <button
                 onClick={refreshData}
-                className="bg-teal-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform"
+                className="bg-teal-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform hover:shadow-xl"
                 aria-label="Refresh packing list"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
