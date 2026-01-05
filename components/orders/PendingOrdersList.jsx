@@ -1,4 +1,4 @@
-// components/orders/PendingOrdersList.jsx - Optimistic updates without refetch
+// components/orders/PendingOrdersList.jsx - Load batches once, skip stock check for dispatched orders
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
@@ -14,7 +14,6 @@ export default function PendingOrdersList() {
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [ordersWithStockStatus, setOrdersWithStockStatus] = useState([]);
-  const [dispatchedOrderIds, setDispatchedOrderIds] = useState(new Set());
   const [checkingStock, setCheckingStock] = useState(true);
 
   useEffect(() => {
@@ -35,6 +34,17 @@ export default function PendingOrdersList() {
     setCheckingStock(true);
     
     const ordersWithStatus = orders.map(order => {
+      // ✅ SKIP STOCK CHECK FOR DISPATCHED ORDERS
+      if (order.dispatched) {
+        return {
+          ...order,
+          canDispatch: false, // Already dispatched, can't dispatch again
+          shortageInfo: [],
+          isAlreadyDispatched: true
+        };
+      }
+
+      // Only check stock for non-dispatched orders
       const checks = order.items.map(item => {
         const availableBatches = getBatchesBySKU(item.sku);
         const totalAvailable = availableBatches.reduce((sum, batch) => sum + batch.remaining, 0);
@@ -54,7 +64,8 @@ export default function PendingOrdersList() {
       return {
         ...order,
         canDispatch: itemsWithShortage.length === 0,
-        shortageInfo: itemsWithShortage
+        shortageInfo: itemsWithShortage,
+        isAlreadyDispatched: false
       };
     });
 
@@ -62,28 +73,15 @@ export default function PendingOrdersList() {
     setCheckingStock(false);
   }
 
-  // Handle optimistic dispatch - remove order from list immediately
-  const handleOrderDispatched = (orderId) => {
-    console.log('✅ Order dispatched optimistically:', orderId);
-    
-    // Add to dispatched set
-    setDispatchedOrderIds(prev => new Set([...prev, orderId]));
-    
-    // Note: We don't refetch orders - order just disappears from pending list
-  };
-
-  // Filter out dispatched orders from the list
-  const activeOrders = ordersWithStockStatus.filter(order => !dispatchedOrderIds.has(order.orderId));
-
-  const filteredOrders = activeOrders.filter(order => {
+  const filteredOrders = ordersWithStockStatus.filter(order => {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'pending' ? order.status === 'Pending' :
-      filter === 'urgent' ? isUrgent(order.orderDate) :
-      filter === 'outofstock' ? !order.canDispatch : true;
+      filter === 'pending' ? order.status === 'Pending' && !order.dispatched :
+      filter === 'urgent' ? isUrgent(order.orderDate) && !order.dispatched :
+      filter === 'outofstock' ? !order.canDispatch && !order.dispatched : true; // ✅ Exclude dispatched from out of stock
     
     return matchesSearch && matchesFilter;
   });
@@ -91,7 +89,8 @@ export default function PendingOrdersList() {
   if (loading || checkingStock) return <LoadingSpinner />;
   if (error) return <ErrorMessage message={error} onRetry={refreshOrders} />;
 
-  const outOfStockCount = activeOrders.filter(o => !o.canDispatch).length;
+  // ✅ Only count non-dispatched orders with shortage
+  const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch && !o.dispatched).length;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -139,9 +138,7 @@ export default function PendingOrdersList() {
       <div className="p-4 space-y-3">
         {filteredOrders.length === 0 ? (
           <EmptyState message={
-            dispatchedOrderIds.size > 0 && activeOrders.length === 0
-              ? 'All orders dispatched! 🎉'
-              : filter === 'outofstock' 
+            filter === 'outofstock' 
               ? 'No orders with stock shortage' 
               : 'No orders found'
           } />
@@ -150,7 +147,7 @@ export default function PendingOrdersList() {
             <OrderCard 
               key={order.orderId} 
               order={order} 
-              onDispatchSuccess={handleOrderDispatched}
+              onRefresh={refreshOrders}
               canDispatch={order.canDispatch}
               shortageInfo={order.shortageInfo}
             />
@@ -163,7 +160,6 @@ export default function PendingOrdersList() {
           onClick={async () => {
             await loadBatches(true);
             refreshOrders();
-            setDispatchedOrderIds(new Set()); // Clear dispatched list on manual refresh
             checkAllOrdersStock();
           }}
           className="bg-blue-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform"
