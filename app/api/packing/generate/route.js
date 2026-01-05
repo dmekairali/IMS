@@ -88,7 +88,7 @@ export async function POST(request) {
     const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
     const boxNumbers = Array.from({ length: totalBoxes }, (_, i) => i + 1).join(',');
 
-    // Update DispatchData sheet with links and box info
+    // Update DispatchData sheet with links
     console.log('📊 Updating DispatchData sheet...');
     await updateDispatchDataWithLinks(
       order.orderId,
@@ -98,23 +98,6 @@ export async function POST(request) {
       totalBoxes
     );
     console.log('✅ Sheet updated successfully');
-
-    // Log to Form Data sheet
-    console.log('📝 Logging to Form Data sheet...');
-    const { logPackingToFormData } = await import('@/lib/logPackingToFormData');
-    
-    // Get total boxes from packing items
-   // const totalBoxes = Math.max(...packingItems.map(item => item.boxNo));
-    
-    await logPackingToFormData({
-      orderId: order.orderId,
-      invoiceNo: order.invoiceNo || order.orderId,
-      customerName: order.customerName,
-      totalBoxes: totalBoxes,
-      packingListLink: packingListFile.webViewLink,
-      stickerLink: stickersFile.webViewLink
-    });
-    console.log('✅ Form Data log completed');
 
     const response = {
       success: true,
