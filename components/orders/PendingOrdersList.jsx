@@ -1,8 +1,9 @@
-// components/orders/PendingOrdersList.jsx - Using global data cache
+// components/orders/PendingOrdersList.jsx - With professional skeleton loader
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
 import LoadingSpinner from '../common/LoadingSpinner';
+import OrdersSkeleton from '../common/OrdersSkeleton';
 import ErrorMessage from '../common/ErrorMessage';
 import EmptyState from '../common/EmptyState';
 import { useData } from '@/contexts/DataContext';
@@ -95,7 +96,9 @@ export default function PendingOrdersList() {
     return matchesSearch && matchesFilter;
   });
 
-  if (loading || checkingStock) return <LoadingSpinner />;
+  // Show skeleton loader instead of spinner
+  if (loading || checkingStock) return <OrdersSkeleton />;
+  
   if (error) return <ErrorMessage message={error} onRetry={handleRefresh} />;
 
   const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch && !o.dispatched).length;
