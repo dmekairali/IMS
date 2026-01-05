@@ -1,4 +1,4 @@
-// app/api/orders/list/route.js - UPDATED VERSION (No OID Log)
+// app/api/orders/list/route.js - UPDATED VERSION (No OID Log, with Combo Expansion)
 // Include packing status and consignment image URL
 import { getSheets } from '@/lib/googleSheets';
 
@@ -68,6 +68,14 @@ export async function GET(request) {
     const totalCol = getFormColumnIndex('Total');
     const skuCol = getFormColumnIndex('SKU(All)');
 
+    // Get combo mappings
+    const comboResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Combo!A1:Z',
+    });
+
+    const comboMap = buildComboMap(comboResponse.data.values || []);
+
     // Build orders
     const orders = [];
 
@@ -77,20 +85,45 @@ export async function GET(request) {
       const dispatched = row[dispatchedCol];
 
       // Get SKU items for this order
-      const orderItems = formDataRows
-        .slice(1)
-        .filter(formRow => {
-          const qty = parseInt(formRow[qtyCol] || '0');
-          return formRow[formOrderIdCol] === orderId && qty > 0;
-        })
-        .map(formRow => ({
-          productName: formRow[productsCol] || '',
-          sku: formRow[skuCol] || '',
-          mrp: parseFloat(formRow[mrpCol] || '0'),
-          package: formRow[packageCol] || '',
-          quantityOrdered: parseInt(formRow[qtyCol] || '0'),
-          total: parseFloat(formRow[totalCol] || '0')
-        }));
+      const orderItems = [];
+      
+      formDataRows.slice(1).forEach(formRow => {
+        const formOrderId = formRow[formOrderIdCol];
+        const qty = parseInt(formRow[qtyCol] || '0');
+        const sku = formRow[skuCol] || '';
+        
+        if (formOrderId !== orderId || qty <= 0) return;
+
+        // Check if this is a combo product
+        if (sku.startsWith('KP-Combo')) {
+          // Expand combo into individual products
+          const comboProducts = comboMap[sku] || [];
+          comboProducts.forEach(comboProduct => {
+            orderItems.push({
+              productName: comboProduct.productName,
+              sku: comboProduct.sku,
+              mrp: comboProduct.mrp,
+              package: comboProduct.package,
+              quantityOrdered: comboProduct.quantity * qty, // Multiply by combo quantity
+              total: comboProduct.mrp * comboProduct.quantity * qty,
+              isFromCombo: true,
+              comboSKU: sku,
+              comboName: formRow[productsCol] || ''
+            });
+          });
+        } else {
+          // Regular product
+          orderItems.push({
+            productName: formRow[productsCol] || '',
+            sku: sku,
+            mrp: parseFloat(formRow[mrpCol] || '0'),
+            package: formRow[packageCol] || '',
+            quantityOrdered: qty,
+            total: parseFloat(formRow[totalCol] || '0'),
+            isFromCombo: false
+          });
+        }
+      });
 
       if (orderItems.length === 0) continue;
 
@@ -132,4 +165,42 @@ export async function GET(request) {
     console.error('Error fetching orders:', error);
     return Response.json({ error: error.message }, { status: 500, headers });
   }
+}
+
+function buildComboMap(comboRows) {
+  if (comboRows.length === 0) return {};
+
+  const headers = comboRows[0];
+  const getColumnIndex = (name) => headers.findIndex(h => h === name);
+
+  const comboSKUCol = getColumnIndex('Combo SKU');
+  const skuCol = getColumnIndex('SKU');
+  const productsInComboCol = getColumnIndex('Products in Combo');
+  const productPriceCol = getColumnIndex('Product Price');
+  const unitInComboCol = getColumnIndex('Unit in Combo');
+  const packagingCol = getColumnIndex('Packaging');
+
+  const comboMap = {};
+
+  for (let i = 1; i < comboRows.length; i++) {
+    const row = comboRows[i];
+    const comboSKU = row[comboSKUCol];
+    const sku = row[skuCol];
+    
+    if (!comboSKU || !sku) continue;
+
+    if (!comboMap[comboSKU]) {
+      comboMap[comboSKU] = [];
+    }
+
+    comboMap[comboSKU].push({
+      sku: sku,
+      productName: row[productsInComboCol] || '',
+      mrp: parseFloat(row[productPriceCol] || '0'),
+      quantity: parseInt(row[unitInComboCol] || '1'),
+      package: row[packagingCol] || ''
+    });
+  }
+
+  return comboMap;
 }
