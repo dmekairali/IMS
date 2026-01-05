@@ -1,19 +1,45 @@
-// components/orders/OrderCard.jsx - Optimistic dispatch with immediate removal
+// components/orders/OrderCard.jsx - Updated with Invoice Link and date format
 'use client';
 import { useState } from 'react';
 import OrderDetails from './OrderDetails';
 import DispatchModal from './DispatchModal';
-import { formatDate } from '@/lib/utils';
 
 export default function OrderCard({ order, onDispatchSuccess, canDispatch, shortageInfo }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [isDispatched, setIsDispatched] = useState(false);
 
-  const getStatusColor = (status) => {
-    if (status === 'Completed') return 'bg-green-100 text-green-800 border-green-200';
-    if (status === 'Pending') return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    return 'bg-gray-100 text-gray-800 border-gray-200';
+  const formatOrderDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      let date;
+      
+      // Check if date is in DD/MM/YYYY format (Google Sheets format)
+      if (typeof dateString === 'string' && dateString.includes('/')) {
+        // Parse DD/MM/YYYY HH:MM:SS format
+        const [datePart] = dateString.split(' ');
+        const [day, month, year] = datePart.split('/');
+        date = new Date(year, parseInt(month) - 1, day);
+      } else {
+        date = new Date(dateString);
+      }
+      
+      // Validate date
+      if (!date || isNaN(date.getTime())) {
+        return dateString;
+      }
+      
+      // Format as "2-May-2025"
+      const day = date.getDate();
+      const month = date.toLocaleDateString('en-US', { month: 'short' });
+      const year = date.getFullYear();
+      
+      return `${day}-${month}-${year}`;
+    } catch (error) {
+      console.error('Error formatting date:', dateString, error);
+      return dateString;
+    }
   };
 
   const getUrgencyIndicator = () => {
@@ -81,15 +107,31 @@ export default function OrderCard({ order, onDispatchSuccess, canDispatch, short
                 <h3 className="font-bold text-lg text-gray-800">{order.customerName}</h3>
               </div>
               <p className="text-sm text-gray-500">Order #{order.orderId}</p>
-              <p className="text-xs text-gray-400 mt-1">{formatDate(order.orderDate)}</p>
+              <p className="text-xs text-gray-400 mt-1">📅 {formatOrderDate(order.orderDate)}</p>
               {order.mobile && (
                 <p className="text-xs text-gray-400">📱 {order.mobile}</p>
               )}
             </div>
             
-            <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(order.status)}`}>
-              {order.status}
-            </span>
+            {/* Invoice Link instead of Status Badge */}
+            {order.invoiceLink ? (
+              <a 
+                href={order.invoiceLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 bg-green-100 text-green-800 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-200 transition-colors flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Invoice
+              </a>
+            ) : (
+              <span className="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs font-semibold border border-gray-200">
+                No Invoice
+              </span>
+            )}
           </div>
 
           <div className="bg-gray-50 rounded-lg p-3 mb-3">
