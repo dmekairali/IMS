@@ -6,36 +6,34 @@ export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
   const [filter, setFilter] = useState('all');
 
   // Filter orders: must have sticker (packing completed) to be eligible
+  // AND must NOT have consignment image already (prevent re-upload)
   const eligibleOrders = orders.filter(order => 
-    order.stickerLink && order.stickerLink !== ''
+    order.stickerLink && order.stickerLink !== '' &&
+    (!order.consignmentImageUrl || order.consignmentImageUrl === '') // ⭐ Only orders without images
   );
 
-  // Sort: Pending (no consignment image) on top
-  const sortedOrders = [...eligibleOrders].sort((a, b) => {
-    const hasConsignmentA = a.consignmentImageUrl && a.consignmentImageUrl !== '';
-    const hasConsignmentB = b.consignmentImageUrl && b.consignmentImageUrl !== '';
-    
-    if (!hasConsignmentA && hasConsignmentB) return -1;
-    if (hasConsignmentA && !hasConsignmentB) return 1;
-    return new Date(b.orderDate) - new Date(a.orderDate);
-  });
+  // Sort by date (newest first) - all are pending uploads
+  const sortedOrders = [...eligibleOrders].sort((a, b) => 
+    new Date(b.orderDate) - new Date(a.orderDate)
+  );
 
   const filteredOrders = sortedOrders.filter(order => {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const hasConsignmentImage = order.consignmentImageUrl && order.consignmentImageUrl !== '';
-    
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'pending' ? !hasConsignmentImage :
-      filter === 'completed' ? hasConsignmentImage : true;
+      filter === 'pending' ? true : // All eligible orders are pending
+      filter === 'completed' ? false : true; // Completed orders are not in eligibleOrders
     
     return matchesSearch && matchesFilter;
   });
 
-  const pendingCount = eligibleOrders.filter(o => !o.consignmentImageUrl || o.consignmentImageUrl === '').length;
-  const completedCount = eligibleOrders.filter(o => o.consignmentImageUrl && o.consignmentImageUrl !== '').length;
+  const pendingCount = eligibleOrders.length; // All eligible orders are pending
+  const completedCount = orders.filter(o => 
+    o.stickerLink && o.stickerLink !== '' && 
+    o.consignmentImageUrl && o.consignmentImageUrl !== ''
+  ).length; // Orders with sticker AND consignment image
 
   return (
     <div className="space-y-4">
@@ -115,7 +113,32 @@ export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
 
       {/* Orders list */}
       <div className="space-y-2">
-        {filteredOrders.length === 0 ? (
+        {filter === 'completed' ? (
+          // Show completed orders (with consignment images)
+          orders
+            .filter(o => 
+              o.stickerLink && o.stickerLink !== '' &&
+              o.consignmentImageUrl && o.consignmentImageUrl !== '' &&
+              (o.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               o.orderId?.toLowerCase().includes(searchQuery.toLowerCase()))
+            )
+            .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
+            .length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No completed consignment uploads found
+            </div>
+          ) : (
+            orders
+              .filter(o => 
+                o.stickerLink && o.stickerLink !== '' &&
+                o.consignmentImageUrl && o.consignmentImageUrl !== '' &&
+                (o.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                 o.orderId?.toLowerCase().includes(searchQuery.toLowerCase()))
+              )
+              .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
+              .map(order => <CompletedOrderItem key={order.orderId} order={order} />)
+          )
+        ) : filteredOrders.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             {eligibleOrders.length === 0 ? (
               <div>
@@ -142,29 +165,18 @@ export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
 }
 
 function OrderListItem({ order, onSelect }) {
-  const hasConsignmentImage = order.consignmentImageUrl && order.consignmentImageUrl !== '';
-
+  // This is for PENDING uploads only
   return (
     <div 
       onClick={onSelect}
-      className={`bg-white rounded-lg border-2 p-4 cursor-pointer transition-all hover:shadow-md ${
-        !hasConsignmentImage 
-          ? 'border-orange-400 bg-orange-50' 
-          : 'border-green-200 bg-green-50 opacity-75'
-      }`}
+      className="bg-white rounded-lg border-2 border-orange-400 bg-orange-50 p-4 cursor-pointer transition-all hover:shadow-md"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            {!hasConsignmentImage ? (
-              <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded flex items-center gap-1">
-                📷 UPLOAD PENDING
-              </span>
-            ) : (
-              <span className="px-2 py-1 bg-green-600 text-white text-xs font-bold rounded">
-                ✓ IMAGE UPLOADED
-              </span>
-            )}
+            <span className="px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded flex items-center gap-1">
+              📷 UPLOAD PENDING
+            </span>
             <h3 className="font-bold text-gray-800">{order.customerName}</h3>
           </div>
           
@@ -223,30 +235,104 @@ function OrderListItem({ order, onSelect }) {
               </a>
             )}
           </div>
-
-          {/* Show consignment image if uploaded */}
-          {hasConsignmentImage && (
-            <div className="mt-2">
-              <a 
-                href={order.consignmentImageUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors inline-flex items-center gap-1"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                View Consignment Image
-              </a>
-            </div>
-          )}
         </div>
 
         <div className="ml-4">
           <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompletedOrderItem({ order }) {
+  // This is for COMPLETED uploads - view only, no click action
+  return (
+    <div className="bg-white rounded-lg border-2 border-green-200 bg-green-50 p-4 opacity-75">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2 py-1 bg-green-600 text-white text-xs font-bold rounded">
+              ✓ IMAGE UPLOADED
+            </span>
+            <h3 className="font-bold text-gray-800">{order.customerName}</h3>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mt-2">
+            <div>
+              <span className="text-gray-600">Order ID:</span>
+              <span className="ml-2 font-semibold text-gray-800">{order.orderId}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Amount:</span>
+              <span className="ml-2 font-semibold text-green-700">₹{order.invoiceAmount?.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Items:</span>
+              <span className="ml-2 font-semibold text-gray-800">{order.items.length}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Mobile:</span>
+              <span className="ml-2 font-semibold text-gray-800">{order.mobile}</span>
+            </div>
+          </div>
+
+          {/* Show all document links */}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {order.invoiceLink && (
+              <a 
+                href={order.invoiceLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+              >
+                📋 Invoice
+              </a>
+            )}
+            {order.packingListLink && (
+              <a 
+                href={order.packingListLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+              >
+                📄 Packing List
+              </a>
+            )}
+            {order.stickerLink && (
+              <a 
+                href={order.stickerLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+              >
+                🏷️ Sticker
+              </a>
+            )}
+          </div>
+
+          {/* Show consignment image */}
+          <div className="mt-2">
+            <a 
+              href={order.consignmentImageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors inline-flex items-center gap-1"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              View Consignment Image
+            </a>
+          </div>
+        </div>
+
+        <div className="ml-4">
+          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
       </div>
