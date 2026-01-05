@@ -1,4 +1,4 @@
-// app/api/consignment/upload/route.js
+// app/api/consignment/upload/route.js - Updated to use order folder
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -29,20 +29,25 @@ export async function POST(request) {
     console.log('✅ Image buffer created, size:', buffer.length);
 
     // Dynamic imports
-    const { uploadImageToDrive, updateDispatchDataWithConsignmentImage } = await import('@/lib/googleDrive');
+    const { uploadImageToDrive, updateDispatchDataWithConsignmentImage, getOrCreateOrderFolder } = await import('@/lib/googleDrive');
     
-    // Consignment folder ID - YOUR SHARED FOLDER
-    const consignmentFolderId = '0AHxwMBnkAoboUk9PVA';
+    // Shared Drive ID (same as packing/attachment)
+    const sharedDriveId = '0ALpZnsXZcrORUk9PVA';
+    
+    // Get or create order folder (same folder as packing lists, stickers, and attachments)
+    console.log('📁 Getting/creating order folder...');
+    const orderFolderId = await getOrCreateOrderFolder(orderId, sharedDriveId);
+    console.log('✅ Order folder ID:', orderFolderId);
     
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `${orderId}_${timestamp}.jpg`;
+    const fileName = `${orderId}_Consignment_${timestamp}.jpg`;
     
-    console.log('☁️ Uploading image to Drive...');
+    console.log('☁️ Uploading image to order folder...');
     const imageFile_result = await uploadImageToDrive(
       buffer,
       fileName,
-      consignmentFolderId
+      orderFolderId // Use order folder instead of separate consignment folder
     );
     console.log('✅ Image uploaded:', imageFile_result.webViewLink);
 
