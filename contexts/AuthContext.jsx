@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
     // Fixed credentials
     const credentials = {
       admin: { password: 'admin#123', role: 'admin', name: 'Administrator' },
-      store: { password: 'store#123', role: 'store', name: 'Store Manager' }
+      store: { password: 'store@kairali', role: 'store', name: 'Store Manager' }
     };
 
     const userCred = credentials[username.toLowerCase()];
