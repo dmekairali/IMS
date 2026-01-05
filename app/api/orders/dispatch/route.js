@@ -1,27 +1,59 @@
-// app/api/orders/dispatch/route.js - Updated to update DispatchData
+// app/api/orders/dispatch/route.js - Updated with IN/OUT(TEST) logging
 import { getSheets, clearBatchCache } from '@/lib/googleSheets';
+import { uploadAttachmentToDrive } from '@/lib/googleDrive';
 
 export async function POST(request) {
-  const { orderId, dispatches } = await request.json();
-
-  if (!orderId || !dispatches || dispatches.length === 0) {
-    return Response.json({ error: 'Invalid request data' }, { status: 400 });
-  }
-
   try {
-    const sheets = await getSheets();
+    const formData = await request.formData();
+    const orderIdRaw = formData.get('orderId');
+    const dispatchesRaw = formData.get('dispatches');
+    const dispatchFrom = formData.get('dispatchFrom');
+    const attachmentFile = formData.get('attachment'); // For non-factory dispatches
     
-    // 1. Log transactions to IMS
-    await logToIMS(sheets, orderId, dispatches);
+    const orderId = orderIdRaw;
+    const dispatches = JSON.parse(dispatchesRaw);
 
-    // 2. Log OID to OID Log
-    await logOIDDispatch(sheets, orderId);
+    console.log('📦 Dispatch Request:', {
+      orderId,
+      dispatchFrom,
+      dispatchCount: dispatches?.length,
+      hasAttachment: !!attachmentFile
+    });
 
-    // 3. Update DispatchData sheet
-    await updateDispatchData(sheets, orderId);
+    if (!orderId || !dispatches || dispatches.length === 0 || !dispatchFrom) {
+      return Response.json({ error: 'Invalid request data' }, { status: 400 });
+    }
 
-    // 4. Clear batch cache to force refresh
-    clearBatchCache();
+    const sheets = await getSheets();
+    let attachmentLink = '';
+
+    // Handle attachment upload for non-factory dispatches
+    if (dispatchFrom !== 'Factory' && attachmentFile) {
+      console.log('📎 Uploading attachment for stockist dispatch...');
+      const bytes = await attachmentFile.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      
+      const fileName = `${orderId}_Attachment_${Date.now()}.${attachmentFile.name.split('.').pop()}`;
+      const result = await uploadAttachmentToDrive(buffer, fileName, orderId);
+      attachmentLink = result.webViewLink;
+      console.log('✅ Attachment uploaded:', attachmentLink);
+    }
+
+    // 1. Log to IN/OUT(TEST) sheet (ONLY for Factory dispatches)
+    if (dispatchFrom === 'Factory') {
+      await logToInOutTest(sheets, orderId, dispatches, dispatchFrom);
+      console.log('✅ IN/OUT(TEST) logged for Factory dispatch');
+    } else {
+      console.log('⏭️ Skipping IN/OUT(TEST) logging for Stockist dispatch');
+    }
+
+    // 2. Update DispatchData sheet
+    await updateDispatchData(sheets, orderId, dispatches, dispatchFrom, attachmentLink);
+
+    // 3. Clear batch cache to force refresh (only for factory dispatches)
+    if (dispatchFrom === 'Factory') {
+      clearBatchCache();
+    }
 
     return Response.json({ 
       success: true, 
@@ -29,60 +61,81 @@ export async function POST(request) {
       dispatches 
     });
   } catch (error) {
-    console.error('Dispatch error:', error);
+    console.error('❌ Dispatch error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
 
-async function logToIMS(sheets, orderId, dispatches) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_IMS;
-  const timestamp = new Date().toISOString();
+async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
+  const spreadsheetId = '1Yxf9Hie-teHeJxIP8ucHoqU966ViSC7SCzxZhw0dn-E';
+  const currentDateTime = new Date().toISOString();
+  const date = new Date().toLocaleDateString('en-IN');
+
+  // Get order details from DispatchData
+  const orderSheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
+  const orderResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: orderSheetId,
+    range: 'DispatchData!A1:Z',
+  });
+
+  const orderRows = orderResponse.data.values || [];
+  const orderHeaders = orderRows[0];
+  const orderIdCol = orderHeaders.findIndex(h => h === 'Oder ID');
+  const clientNameCol = orderHeaders.findIndex(h => h === 'Name of Client');
+  const invoiceNoCol = orderHeaders.findIndex(h => h === 'Invoice No');
+
+  let clientName = '';
+  let invoiceNo = '';
+
+  for (let i = 1; i < orderRows.length; i++) {
+    if (orderRows[i][orderIdCol] === orderId) {
+      clientName = orderRows[i][clientNameCol] || '';
+      invoiceNo = orderRows[i][invoiceNoCol] || orderId;
+      break;
+    }
+  }
+
+  // IN/OUT(TEST) columns:
+  // TimeStamp | IN/OUT | Date | FG/RM/PM | Description | Sku | Qty | Transaction Type | 
+  // Invoice N./ Batch N. | PO Number | Cost | Cost (without tax) | RefrenceID | Client Name | UID | Invoice | Remarks
   
-  // IMS columns: SKU, IN, OUT, BatchNumber, OrderID, Timestamp, Type
   const rows = dispatches.map(dispatch => [
-    dispatch.sku,
-    '', // IN - empty for dispatch
-    dispatch.qty, // OUT
-    dispatch.batchNo,
-    orderId,
-    timestamp,
-    'Dispatch'
+    currentDateTime,           // TimeStamp
+    'OUT',                     // IN/OUT
+    date,                      // Date
+    'FG',                      // FG/RM/PM
+    dispatch.productName || '', // Description
+    dispatch.sku,              // Sku
+    dispatch.qty,              // Qty
+    'New Order FMS',           // Transaction Type
+    dispatch.batchNo || '',    // Invoice N./ Batch N. (Batch Number for Factory, empty for Stockist)
+    '',                        // PO Number
+    '',                        // Cost
+    '',                        // Cost (without tax)
+    orderId,                   // RefrenceID
+    clientName,                // Client Name
+    '',                        // UID
+    invoiceNo,                 // Invoice
+    dispatchFrom !== 'Factory' ? `Dispatched from ${dispatchFrom}` : '' // Remarks
   ]);
+
+  console.log(`📝 Logging ${rows.length} entries to IN/OUT(TEST)`);
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'IMS!A:G',
+    range: 'IN/OUT(TEST)!A:Q',
     valueInputOption: 'RAW',
     resource: {
       values: rows
     }
   });
+
+  console.log('✅ IN/OUT(TEST) logging completed');
 }
 
-async function logOIDDispatch(sheets, orderId) {
+async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, attachmentLink) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
-  const timestamp = new Date().toISOString();
-  
-  // OID Log columns: Order_ID, Time_Stamp, PI Total, BillTo/ShipTo, Attachment
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: 'OID Log!A:E',
-    valueInputOption: 'RAW',
-    resource: {
-      values: [[
-        orderId,
-        timestamp,
-        '', // PI Total
-        '', // BillTo/ShipTo
-        ''  // Attachment
-      ]]
-    }
-  });
-}
-
-async function updateDispatchData(sheets, orderId) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
-  const timestamp = new Date().toISOString();
+  const currentDateTime = new Date().toISOString();
 
   // 1. Find the row with this Order ID
   const response = await sheets.spreadsheets.values.get({
@@ -94,9 +147,12 @@ async function updateDispatchData(sheets, orderId) {
   if (rows.length === 0) return;
 
   const headers = rows[0];
-  const orderIdCol = headers.findIndex(h => h === 'Oder ID'); // Note typo
+  const orderIdCol = headers.findIndex(h => h === 'Oder ID');
   const dispatchedCol = headers.findIndex(h => h === 'Dispatched');
   const dispatchedDateCol = headers.findIndex(h => h === 'Dispatched Date');
+  const piTotalCol = headers.findIndex(h => h === 'PI Total');
+  const billToShipToCol = headers.findIndex(h => h === 'BillTo/ShipTo');
+  const attachmentCol = headers.findIndex(h => h === 'Attachment');
 
   // Find row index
   let rowIndex = -1;
@@ -111,29 +167,70 @@ async function updateDispatchData(sheets, orderId) {
     throw new Error(`Order ${orderId} not found in DispatchData`);
   }
 
-  // 2. Convert column indices to letters
-  const dispatchedColLetter = indexToColumn(dispatchedCol);
-  const dispatchedDateColLetter = indexToColumn(dispatchedDateCol);
+  // Calculate total quantity
+  const totalQty = dispatches.reduce((sum, d) => sum + d.qty, 0);
 
-  // 3. Update Dispatched column
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `DispatchData!${dispatchedColLetter}${rowIndex}`,
-    valueInputOption: 'RAW',
-    resource: {
+  // Determine BillTo/ShipTo value
+  const billToShipToValue = dispatchFrom === 'Factory' 
+    ? 'Kairali Ayurvedic Products Pvt Ltd' 
+    : dispatchFrom;
+
+  // 2. Update columns
+  const updates = [];
+
+  // Dispatched = Yes
+  if (dispatchedCol !== -1) {
+    updates.push({
+      range: `DispatchData!${indexToColumn(dispatchedCol)}${rowIndex}`,
       values: [['Yes']]
-    }
-  });
+    });
+  }
 
-  // 4. Update Dispatched Date column
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `DispatchData!${dispatchedDateColLetter}${rowIndex}`,
-    valueInputOption: 'RAW',
-    resource: {
-      values: [[timestamp]]
-    }
-  });
+  // Dispatched Date
+  if (dispatchedDateCol !== -1) {
+    updates.push({
+      range: `DispatchData!${indexToColumn(dispatchedDateCol)}${rowIndex}`,
+      values: [[currentDateTime]]
+    });
+  }
+
+  // PI Total
+  if (piTotalCol !== -1) {
+    updates.push({
+      range: `DispatchData!${indexToColumn(piTotalCol)}${rowIndex}`,
+      values: [[totalQty]]
+    });
+  }
+
+  // BillTo/ShipTo
+  if (billToShipToCol !== -1) {
+    updates.push({
+      range: `DispatchData!${indexToColumn(billToShipToCol)}${rowIndex}`,
+      values: [[billToShipToValue]]
+    });
+  }
+
+  // Attachment (only for non-factory dispatches)
+  if (attachmentCol !== -1 && dispatchFrom !== 'Factory' && attachmentLink) {
+    updates.push({
+      range: `DispatchData!${indexToColumn(attachmentCol)}${rowIndex}`,
+      values: [[attachmentLink]]
+    });
+  }
+
+  // Batch update all fields
+  for (const update of updates) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: update.range,
+      valueInputOption: 'RAW',
+      resource: {
+        values: update.values
+      }
+    });
+  }
+
+  console.log('✅ DispatchData updated successfully');
 }
 
 function indexToColumn(index) {
