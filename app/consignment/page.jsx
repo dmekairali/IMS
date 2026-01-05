@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import ConsignmentOrdersList from '@/components/consignment/ConsignmentOrdersList';
 import ConsignmentUploadForm from '@/components/consignment/ConsignmentUploadForm';
-import LoadingSpinner from '@/components/common/LoadingSpinner';
+import PackingConsignmentSkeleton from '@/components/common/PackingConsignmentSkeleton';
 import ErrorMessage from '@/components/common/ErrorMessage';
 import { useData } from '@/contexts/DataContext';
 
@@ -32,11 +32,7 @@ export default function ConsignmentPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
+    return <PackingConsignmentSkeleton type="consignment" />;
   }
 
   if (error) {
@@ -61,7 +57,7 @@ export default function ConsignmentPage() {
             <div className="fixed bottom-24 right-4 z-10">
               <button
                 onClick={refreshData}
-                className="bg-purple-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform"
+                className="bg-purple-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform hover:shadow-xl"
                 aria-label="Refresh consignment list"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
