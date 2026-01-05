@@ -1,14 +1,14 @@
-// components/orders/OrderCard.jsx - Display invoice amount
+// components/orders/OrderCard.jsx - Optimistic dispatch with immediate removal
 'use client';
 import { useState } from 'react';
 import OrderDetails from './OrderDetails';
 import DispatchModal from './DispatchModal';
 import { formatDate } from '@/lib/utils';
 
-export default function OrderCard({ order, onRefresh, canDispatch, shortageInfo }) {
+export default function OrderCard({ order, onDispatchSuccess, canDispatch, shortageInfo }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
-  const [isDispatching, setIsDispatching] = useState(false);
+  const [isDispatched, setIsDispatched] = useState(false);
 
   const getStatusColor = (status) => {
     if (status === 'Completed') return 'bg-green-100 text-green-800 border-green-200';
@@ -23,7 +23,7 @@ export default function OrderCard({ order, onRefresh, canDispatch, shortageInfo 
     return '🟢';
   };
 
-  const isLocked = order.status === 'Completed' || isDispatching;
+  const isLocked = order.status === 'Completed' || isDispatched;
 
   const handleDispatchClick = () => {
     if (isLocked || !canDispatch) return;
@@ -31,10 +31,20 @@ export default function OrderCard({ order, onRefresh, canDispatch, shortageInfo 
   };
 
   const handleDispatchSuccess = () => {
-    setIsDispatching(true);
+    // Optimistically mark as dispatched
+    setIsDispatched(true);
     setShowDispatchModal(false);
-    onRefresh();
+    
+    // Notify parent to remove from list
+    if (onDispatchSuccess) {
+      onDispatchSuccess(order.orderId);
+    }
   };
+
+  // Don't render if dispatched (removed from pending list)
+  if (isDispatched) {
+    return null;
+  }
 
   return (
     <>
