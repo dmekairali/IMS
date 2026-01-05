@@ -1,15 +1,15 @@
-// components/orders/PendingOrdersList.jsx - Load batches once, skip stock check for dispatched orders
+// components/orders/PendingOrdersList.jsx - Using global data cache
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
 import LoadingSpinner from '../common/LoadingSpinner';
 import ErrorMessage from '../common/ErrorMessage';
 import EmptyState from '../common/EmptyState';
-import { useOrders } from '@/hooks/useOrders';
+import { useData } from '@/contexts/DataContext';
 import { useBatches } from '@/hooks/useBatches';
 
 export default function PendingOrdersList() {
-  const { orders, loading, error, refreshOrders } = useOrders();
+  const { orders, loading, error, refreshData } = useData();
   const { loadBatches, getBatchesBySKU } = useBatches();
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,7 +38,7 @@ export default function PendingOrdersList() {
       if (order.dispatched) {
         return {
           ...order,
-          canDispatch: false, // Already dispatched, can't dispatch again
+          canDispatch: false,
           shortageInfo: [],
           isAlreadyDispatched: true
         };
@@ -73,6 +73,12 @@ export default function PendingOrdersList() {
     setCheckingStock(false);
   }
 
+  const handleRefresh = async () => {
+    await loadBatches(true);
+    await refreshData();
+    checkAllOrdersStock();
+  };
+
   const filteredOrders = ordersWithStockStatus.filter(order => {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -81,15 +87,14 @@ export default function PendingOrdersList() {
       filter === 'all' ? true :
       filter === 'pending' ? order.status === 'Pending' && !order.dispatched :
       filter === 'urgent' ? isUrgent(order.orderDate) && !order.dispatched :
-      filter === 'outofstock' ? !order.canDispatch && !order.dispatched : true; // ✅ Exclude dispatched from out of stock
+      filter === 'outofstock' ? !order.canDispatch && !order.dispatched : true;
     
     return matchesSearch && matchesFilter;
   });
 
   if (loading || checkingStock) return <LoadingSpinner />;
-  if (error) return <ErrorMessage message={error} onRetry={refreshOrders} />;
+  if (error) return <ErrorMessage message={error} onRetry={handleRefresh} />;
 
-  // ✅ Only count non-dispatched orders with shortage
   const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch && !o.dispatched).length;
 
   return (
@@ -147,7 +152,7 @@ export default function PendingOrdersList() {
             <OrderCard 
               key={order.orderId} 
               order={order} 
-              onRefresh={refreshOrders}
+              onRefresh={handleRefresh}
               canDispatch={order.canDispatch}
               shortageInfo={order.shortageInfo}
             />
@@ -157,11 +162,7 @@ export default function PendingOrdersList() {
 
       <div className="fixed bottom-24 right-4">
         <button
-          onClick={async () => {
-            await loadBatches(true);
-            refreshOrders();
-            checkAllOrdersStock();
-          }}
+          onClick={handleRefresh}
           className="bg-blue-600 text-white p-4 rounded-full shadow-lg active:scale-95 transition-transform"
           aria-label="Refresh orders"
         >
