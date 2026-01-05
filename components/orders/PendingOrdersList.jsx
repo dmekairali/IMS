@@ -33,7 +33,10 @@ export default function PendingOrdersList() {
   function checkAllOrdersStock() {
     setCheckingStock(true);
     
-    const ordersWithStatus = orders.map(order => {
+    // Filter out cancelled orders first
+    const activeOrders = orders.filter(order => order.status !== 'Order Cancel');
+    
+    const ordersWithStatus = activeOrders.map(order => {
       // ✅ SKIP STOCK CHECK FOR DISPATCHED ORDERS
       if (order.dispatched) {
         return {
@@ -85,7 +88,7 @@ export default function PendingOrdersList() {
     
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'pending' ? order.status === 'Pending' && !order.dispatched :
+      filter === 'pending' ? !order.dispatched && order.status !== 'Order Cancel' :
       filter === 'urgent' ? isUrgent(order.orderDate) && !order.dispatched :
       filter === 'outofstock' ? !order.canDispatch && !order.dispatched : true;
     
