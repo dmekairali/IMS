@@ -1,6 +1,7 @@
 // app/api/orders/dispatch/route.js - Updated with IN/OUT(TEST) logging
 import { getSheets, clearBatchCache } from '@/lib/googleSheets';
 import { uploadAttachmentToDrive } from '@/lib/googleDrive';
+import { formatDateTime, formatDate } from '@/lib/dateFormatter';
 
 export async function POST(request) {
   try {
@@ -68,8 +69,10 @@ export async function POST(request) {
 
 async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
   const spreadsheetId = '1Yxf9Hie-teHeJxIP8ucHoqU966ViSC7SCzxZhw0dn-E';
-  const currentDateTime = new Date().toISOString();
-  const date = new Date().toLocaleDateString('en-IN');
+  
+  // Format: DD/MM/YYYY HH:MM:SS and DD/MM/YYYY
+  const currentDateTime = formatDateTime();
+  const date = formatDate();
 
   // Get order details from DispatchData
   const orderSheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
@@ -100,9 +103,9 @@ async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
   // Invoice N./ Batch N. | PO Number | Cost | Cost (without tax) | RefrenceID | Client Name | UID | Invoice | Remarks
   
   const rows = dispatches.map(dispatch => [
-    currentDateTime,           // TimeStamp
+    currentDateTime,           // TimeStamp (DD/MM/YYYY HH:MM:SS)
     'OUT',                     // IN/OUT
-    date,                      // Date
+    date,                      // Date (DD/MM/YYYY)
     'FG',                      // FG/RM/PM
     dispatch.productName || '', // Description
     dispatch.sku,              // Sku
@@ -135,7 +138,9 @@ async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
 
 async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, attachmentLink) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
-  const currentDateTime = new Date().toISOString();
+  
+  // Format: DD/MM/YYYY HH:MM:SS
+  const currentDateTime = formatDateTime();
 
   // 1. Find the row with this Order ID
   const response = await sheets.spreadsheets.values.get({
@@ -186,7 +191,7 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
     });
   }
 
-  // Dispatched Date
+  // Dispatched Date (DD/MM/YYYY HH:MM:SS)
   if (dispatchedDateCol !== -1) {
     updates.push({
       range: `DispatchData!${indexToColumn(dispatchedDateCol)}${rowIndex}`,
