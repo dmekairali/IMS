@@ -19,7 +19,7 @@ export async function GET(request) {
     // Get all orders from DispatchData (no OID Log check needed)
     const dispatchDataResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'DispatchData!A1:Z',
+      range: 'DispatchData!A1:AE',
     });
 
     const dispatchRows = dispatchDataResponse.data.values || [];
@@ -49,7 +49,7 @@ export async function GET(request) {
     // Get all SKU details from All Form Data
     const formDataResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'All Form Data!A1:Z',
+      range: 'All Form Data!A1:Q',
     });
 
     const formDataRows = formDataResponse.data.values || [];
@@ -137,7 +137,7 @@ export async function GET(request) {
 
       orders.push({
         orderId: orderId,
-        orderDate: row[timestampCol] || new Date().toISOString(),
+        orderDate: row[timestampCol],
         customerName: row[clientNameCol] || 'Unknown',
         mobile: row[mobileCol] || '',
         invoiceAmount: parseFloat(row[invoiceAmountCol] || '0'),
