@@ -1,5 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '../common/Pagination';
 
 export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,11 +31,52 @@ export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
     return matchesSearch && matchesFilter;
   });
 
+  // Pagination for filtered orders (10 items per page)
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    goToPage,
+    nextPage,
+    prevPage,
+    goToFirstPage,
+    goToLastPage,
+    hasNextPage,
+    hasPrevPage,
+    startIndex,
+    endIndex,
+    totalItems,
+    resetPage
+  } = usePagination(filteredOrders, 10);
+
+  // Reset to page 1 when search or filter changes
+  useEffect(() => {
+    resetPage();
+  }, [searchQuery, filter, resetPage]);
+
   const pendingCount = eligibleOrders.length; // All eligible orders are pending
   const completedCount = orders.filter(o => 
     o.stickerLink && o.stickerLink !== '' && 
     o.consignmentImageUrl && o.consignmentImageUrl !== ''
   ).length; // Orders with sticker AND consignment image
+
+  // For completed filter, we need separate logic
+  const completedOrders = filter === 'completed' 
+    ? orders
+        .filter(o => 
+          o.stickerLink && o.stickerLink !== '' &&
+          o.consignmentImageUrl && o.consignmentImageUrl !== '' &&
+          (o.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           o.orderId?.toLowerCase().includes(searchQuery.toLowerCase()))
+        )
+        .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
+    : [];
+
+  // Pagination for completed orders
+  const {
+    paginatedItems: paginatedCompletedOrders,
+    ...completedPagination
+  } = usePagination(completedOrders, 10);
 
   return (
     <div className="space-y-4">
@@ -43,7 +86,7 @@ export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
           <h2 className="text-xl font-bold text-gray-800 mb-3">
             📸 Consignment Image Upload
             <span className="text-sm font-normal text-gray-500 ml-2">
-              ({filteredOrders.length} orders)
+              ({filter === 'completed' ? completedOrders.length : filteredOrders.length} orders)
             </span>
           </h2>
           
@@ -114,31 +157,36 @@ export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
       {/* Orders list */}
       <div className="space-y-2">
         {filter === 'completed' ? (
-          // Show completed orders (with consignment images)
-          orders
-            .filter(o => 
-              o.stickerLink && o.stickerLink !== '' &&
-              o.consignmentImageUrl && o.consignmentImageUrl !== '' &&
-              (o.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               o.orderId?.toLowerCase().includes(searchQuery.toLowerCase()))
-            )
-            .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
-            .length === 0 ? (
+          // Show completed orders with pagination
+          paginatedCompletedOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               No completed consignment uploads found
             </div>
           ) : (
-            orders
-              .filter(o => 
-                o.stickerLink && o.stickerLink !== '' &&
-                o.consignmentImageUrl && o.consignmentImageUrl !== '' &&
-                (o.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                 o.orderId?.toLowerCase().includes(searchQuery.toLowerCase()))
-              )
-              .sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate))
-              .map(order => <CompletedOrderItem key={order.orderId} order={order} />)
+            <>
+              {paginatedCompletedOrders.map(order => (
+                <CompletedOrderItem key={order.orderId} order={order} />
+              ))}
+              
+              {/* Pagination for completed orders */}
+              <Pagination
+                currentPage={completedPagination.currentPage}
+                totalPages={completedPagination.totalPages}
+                onPageChange={completedPagination.goToPage}
+                onPrevious={completedPagination.prevPage}
+                onNext={completedPagination.nextPage}
+                onFirst={completedPagination.goToFirstPage}
+                onLast={completedPagination.goToLastPage}
+                hasNextPage={completedPagination.hasNextPage}
+                hasPrevPage={completedPagination.hasPrevPage}
+                startIndex={completedPagination.startIndex}
+                endIndex={completedPagination.endIndex}
+                totalItems={completedPagination.totalItems}
+                className="mt-4 rounded-lg shadow-sm"
+              />
+            </>
           )
-        ) : filteredOrders.length === 0 ? (
+        ) : paginatedItems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             {eligibleOrders.length === 0 ? (
               <div>
@@ -151,13 +199,32 @@ export default function ConsignmentOrdersList({ orders, onSelectOrder }) {
             )}
           </div>
         ) : (
-          filteredOrders.map(order => (
-            <OrderListItem 
-              key={order.orderId} 
-              order={order} 
-              onSelect={() => onSelectOrder(order)}
+          <>
+            {paginatedItems.map(order => (
+              <OrderListItem 
+                key={order.orderId} 
+                order={order} 
+                onSelect={() => onSelectOrder(order)}
+              />
+            ))}
+            
+            {/* Pagination for pending orders */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+              onPrevious={prevPage}
+              onNext={nextPage}
+              onFirst={goToFirstPage}
+              onLast={goToLastPage}
+              hasNextPage={hasNextPage}
+              hasPrevPage={hasPrevPage}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              totalItems={totalItems}
+              className="mt-4 rounded-lg shadow-sm"
             />
-          ))
+          </>
         )}
       </div>
     </div>
