@@ -1,5 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePagination } from '@/hooks/usePagination';
+import Pagination from '../common/Pagination';
 
 export default function PackingOrdersList({ orders, onSelectOrder }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,6 +25,29 @@ export default function PackingOrdersList({ orders, onSelectOrder }) {
     
     return matchesSearch && matchesFilter;
   });
+
+  // Pagination (10 items per page)
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems,
+    goToPage,
+    nextPage,
+    prevPage,
+    goToFirstPage,
+    goToLastPage,
+    hasNextPage,
+    hasPrevPage,
+    startIndex,
+    endIndex,
+    totalItems,
+    resetPage
+  } = usePagination(filteredOrders, 10);
+
+  // Reset to page 1 when search or filter changes
+  useEffect(() => {
+    resetPage();
+  }, [searchQuery, filter, resetPage]);
 
   const pendingCount = orders.filter(o => !o.hasPacking).length;
   const completedCount = orders.filter(o => o.hasPacking).length;
@@ -90,18 +115,37 @@ export default function PackingOrdersList({ orders, onSelectOrder }) {
 
       {/* Orders list */}
       <div className="space-y-2">
-        {filteredOrders.length === 0 ? (
+        {paginatedItems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No orders found
           </div>
         ) : (
-          filteredOrders.map(order => (
-            <OrderListItem 
-              key={order.orderId} 
-              order={order} 
-              onSelect={() => onSelectOrder(order)}
+          <>
+            {paginatedItems.map(order => (
+              <OrderListItem 
+                key={order.orderId} 
+                order={order} 
+                onSelect={() => onSelectOrder(order)}
+              />
+            ))}
+
+            {/* Pagination */}
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+              onPrevious={prevPage}
+              onNext={nextPage}
+              onFirst={goToFirstPage}
+              onLast={goToLastPage}
+              hasNextPage={hasNextPage}
+              hasPrevPage={hasPrevPage}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              totalItems={totalItems}
+              className="mt-4 rounded-lg shadow-sm"
             />
-          ))
+          </>
         )}
       </div>
     </div>
