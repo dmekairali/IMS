@@ -1,4 +1,4 @@
-// app/login/page.jsx
+// app/login/page.jsx - FIXED: Proper login flow
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -23,13 +23,25 @@ export default function LoginPage() {
       const result = login(username, password);
       
       if (result.success) {
+        // ⭐ FIX: Wait a bit to ensure state is saved, then navigate
+        console.log('✅ Login successful, redirecting...');
+        
+        // Small delay to ensure localStorage and cookies are set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Navigate to home page
         router.push('/');
+        
+        // ⭐ CRITICAL: Force a hard refresh to ensure clean state
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 200);
       } else {
         setError(result.error);
+        setLoading(false);
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -79,6 +91,7 @@ export default function LoginPage() {
                   placeholder="Enter username"
                   required
                   autoComplete="username"
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -102,11 +115,13 @@ export default function LoginPage() {
                   placeholder="Enter password"
                   required
                   autoComplete="current-password"
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <svg className="w-5 h-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,8 +155,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          
         </div>
 
         <div className="text-center mt-6">
