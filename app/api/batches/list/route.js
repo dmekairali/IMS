@@ -37,7 +37,7 @@ export async function GET(request) {
     console.log('🔍 Fetching fresh batches from Google Sheets...');
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Batches!A2:Z',
+      range: 'Batches!A2:J',
     });
 
     const rows = response.data.values || [];
