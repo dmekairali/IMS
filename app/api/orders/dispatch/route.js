@@ -1,4 +1,5 @@
-// app/api/orders/dispatch/route.js - Updated with IN/OUT(FG) logging
+// app/api/orders/dispatch/route.js - COMPLETE FIX
+// Updated with IN/OUT(FG) + IST Timezone + USER_ENTERED for proper dates
 import { getSheets, clearBatchCache } from '@/lib/googleSheets';
 import { uploadAttachmentToDrive } from '@/lib/googleDrive';
 import { formatDateTime, formatDate } from '@/lib/dateFormatter';
@@ -42,7 +43,7 @@ export async function POST(request) {
 
     // 1. Log to IN/OUT(FG) sheet (ONLY for Factory dispatches)
     if (dispatchFrom === 'Factory') {
-      await logToInOutTest(sheets, orderId, dispatches, dispatchFrom);
+      await logToInOutFG(sheets, orderId, dispatches, dispatchFrom);
       console.log('✅ IN/OUT(FG) logged for Factory dispatch');
     } else {
       console.log('⏭️ Skipping IN/OUT(FG) logging for Stockist dispatch');
@@ -67,12 +68,16 @@ export async function POST(request) {
   }
 }
 
-async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
+async function logToInOutFG(sheets, orderId, dispatches, dispatchFrom) {
   const spreadsheetId = '1Yxf9Hie-teHeJxIP8ucHoqU966ViSC7SCzxZhw0dn-E';
   
   // Format: DD/MM/YYYY HH:MM:SS and DD/MM/YYYY
+  // ✅ Now uses Indian Standard Time (IST - Asia/Kolkata)
   const currentDateTime = formatDateTime();
   const date = formatDate();
+
+  console.log(`🕒 IST DateTime: ${currentDateTime}`);
+  console.log(`📅 IST Date: ${date}`);
 
   // Get order details from DispatchData
   const orderSheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
@@ -103,9 +108,9 @@ async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
   // Invoice N./ Batch N. | PO Number | Cost | Cost (without tax) | RefrenceID | Client Name | UID | Invoice | Remarks
   
   const rows = dispatches.map(dispatch => [
-    currentDateTime,           // TimeStamp (DD/MM/YYYY HH:MM:SS)
+    currentDateTime,           // TimeStamp (DD/MM/YYYY HH:MM:SS) - IST
     'OUT',                     // IN/OUT
-    date,                      // Date (DD/MM/YYYY)
+    date,                      // Date (DD/MM/YYYY) - IST
     'FG',                      // FG/RM/PM
     dispatch.productName || '', // Description
     dispatch.sku,              // Sku
@@ -122,24 +127,24 @@ async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
     dispatchFrom !== 'Factory' ? `Dispatched from ${dispatchFrom}` : '' // Remarks
   ]);
 
-  console.log(`📝 Logging ${rows.length} entries to IN/OUT(FG)`);
+  console.log(`📝 Logging ${rows.length} entries to IN/OUT(FG) with IST timestamps`);
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: 'IN/OUT(FG)!A:Q',
-    valueInputOption: 'RAW',
+    valueInputOption: 'USER_ENTERED', // ✅ Changed from 'RAW' to 'USER_ENTERED' for proper date parsing
     resource: {
       values: rows
     }
   });
 
-  console.log('✅ IN/OUT(FG) logging completed');
+  console.log('✅ IN/OUT(FG) logging completed with proper date format');
 }
 
 async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, attachmentLink) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
   
-  // Format: DD/MM/YYYY HH:MM:SS
+  // Format: DD/MM/YYYY HH:MM:SS - IST
   const currentDateTime = formatDateTime();
 
   // 1. Find the row with this Order ID
@@ -191,7 +196,7 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
     });
   }
 
-  // Dispatched Date (DD/MM/YYYY HH:MM:SS)
+  // Dispatched Date (DD/MM/YYYY HH:MM:SS) - IST
   if (dispatchedDateCol !== -1) {
     updates.push({
       range: `DispatchData!${indexToColumn(dispatchedDateCol)}${rowIndex}`,
@@ -224,18 +229,19 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
   }
 
   // Batch update all fields
+  // ✅ Using USER_ENTERED for proper date handling
   for (const update of updates) {
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: update.range,
-      valueInputOption: 'RAW',
+      valueInputOption: 'USER_ENTERED', // ✅ Changed from 'RAW' to 'USER_ENTERED'
       resource: {
         values: update.values
       }
     });
   }
 
-  console.log('✅ DispatchData updated successfully');
+  console.log('✅ DispatchData updated successfully with IST timestamps');
 }
 
 function indexToColumn(index) {
