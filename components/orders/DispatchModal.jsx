@@ -1,4 +1,6 @@
-// components/orders/DispatchModal.jsx - Updated with batch selection and attachment upload
+// components/orders/DispatchModal.jsx - FIXED VERSION
+// Fix 1: Added pb-20 to prevent buttons being cut off by bottom bar
+// Fix 2: Made "Dispatch From" readonly field
 'use client';
 import { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
@@ -229,27 +231,36 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
   return (
     <>
       <Modal onClose={onClose} title="Auto Dispatch">
-        <div className="space-y-4">
+        {/* ✅ FIX 1: Added pb-20 to create space for buttons at bottom */}
+        <div className="space-y-4 pb-20">
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="font-semibold text-gray-800 mb-2">Order #{order.orderId}</h3>
             <p className="text-sm text-gray-600">{order.customerName}</p>
             <p className="text-sm text-gray-600">{order.items.length} items</p>
           </div>
 
-          {/* Dispatch From Selection */}
+          {/* ✅ FIX 2: Changed to readonly input with select-style dropdown */}
           <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Dispatch From <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
+            <select
               value={dispatchFrom}
               onChange={(e) => setDispatchFrom(e.target.value)}
-              placeholder="e.g., Factory, Stockist Name, etc."
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+            >
+              <option value="Factory">Factory</option>
+              <option value="Stockist - Mumbai">Stockist - Mumbai</option>
+              <option value="Stockist - Delhi">Stockist - Delhi</option>
+              <option value="Stockist - Bangalore">Stockist - Bangalore</option>
+              <option value="Stockist - Chennai">Stockist - Chennai</option>
+              <option value="Stockist - Kolkata">Stockist - Kolkata</option>
+              <option value="Stockist - Hyderabad">Stockist - Hyderabad</option>
+              <option value="Stockist - Pune">Stockist - Pune</option>
+              <option value="Other">Other Stockist</option>
+            </select>
             <p className="text-xs text-gray-600 mt-1">
-              Enter "Factory" for warehouse dispatch, or stockist name for external dispatch
+              Select "Factory" for warehouse dispatch, or choose stockist location
             </p>
           </div>
 
