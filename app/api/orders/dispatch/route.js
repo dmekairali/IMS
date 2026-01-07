@@ -1,4 +1,4 @@
-// app/api/orders/dispatch/route.js - Updated with IN/OUT(TEST) logging
+// app/api/orders/dispatch/route.js - Updated with IN/OUT(FG) logging
 import { getSheets, clearBatchCache } from '@/lib/googleSheets';
 import { uploadAttachmentToDrive } from '@/lib/googleDrive';
 import { formatDateTime, formatDate } from '@/lib/dateFormatter';
@@ -40,12 +40,12 @@ export async function POST(request) {
       console.log('✅ Attachment uploaded:', attachmentLink);
     }
 
-    // 1. Log to IN/OUT(TEST) sheet (ONLY for Factory dispatches)
+    // 1. Log to IN/OUT(FG) sheet (ONLY for Factory dispatches)
     if (dispatchFrom === 'Factory') {
       await logToInOutTest(sheets, orderId, dispatches, dispatchFrom);
-      console.log('✅ IN/OUT(TEST) logged for Factory dispatch');
+      console.log('✅ IN/OUT(FG) logged for Factory dispatch');
     } else {
-      console.log('⏭️ Skipping IN/OUT(TEST) logging for Stockist dispatch');
+      console.log('⏭️ Skipping IN/OUT(FG) logging for Stockist dispatch');
     }
 
     // 2. Update DispatchData sheet
@@ -98,7 +98,7 @@ async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
     }
   }
 
-  // IN/OUT(TEST) columns:
+  // IN/OUT(FG) columns:
   // TimeStamp | IN/OUT | Date | FG/RM/PM | Description | Sku | Qty | Transaction Type | 
   // Invoice N./ Batch N. | PO Number | Cost | Cost (without tax) | RefrenceID | Client Name | UID | Invoice | Remarks
   
@@ -122,18 +122,18 @@ async function logToInOutTest(sheets, orderId, dispatches, dispatchFrom) {
     dispatchFrom !== 'Factory' ? `Dispatched from ${dispatchFrom}` : '' // Remarks
   ]);
 
-  console.log(`📝 Logging ${rows.length} entries to IN/OUT(TEST)`);
+  console.log(`📝 Logging ${rows.length} entries to IN/OUT(FG)`);
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: 'IN/OUT(TEST)!A:Q',
+    range: 'IN/OUT(FG)!A:Q',
     valueInputOption: 'RAW',
     resource: {
       values: rows
     }
   });
 
-  console.log('✅ IN/OUT(TEST) logging completed');
+  console.log('✅ IN/OUT(FG) logging completed');
 }
 
 async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, attachmentLink) {
