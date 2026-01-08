@@ -596,6 +596,7 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
       onClick={handleSuccessModalClose}
     />
     <div className="relative bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+      {/* Success Icon */}
       <div className="flex justify-center mb-4">
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
           <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -603,13 +604,19 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
           </svg>
         </div>
       </div>
+
+      {/* Title */}
       <h3 className="text-xl font-bold text-gray-800 text-center mb-2">
         Documents Generated Successfully!
       </h3>
+      
       <p className="text-sm text-gray-600 text-center mb-6">
         Your packing documents have been created and saved to Google Drive.
       </p>
+
+      {/* Document Links */}
       <div className="space-y-3 mb-6">
+        {/* Packing List Link */}
         
           href={generatedLinks.packingListLink}
           target="_blank"
@@ -629,6 +636,8 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </a>
+
+        {/* Sticker Link */}
         
           href={generatedLinks.stickerLink}
           target="_blank"
@@ -649,6 +658,8 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
           </svg>
         </a>
       </div>
+
+      {/* Info Banner */}
       <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-6">
         <div className="flex items-start gap-2">
           <svg className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -659,6 +670,8 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
           </p>
         </div>
       </div>
+
+      {/* Close Button */}
       <button
         onClick={handleSuccessModalClose}
         className="w-full px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-700 text-white font-semibold rounded-lg hover:from-teal-700 hover:to-teal-800 transition-all shadow-sm"
