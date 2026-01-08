@@ -1,4 +1,4 @@
-// components/orders/DispatchModal.jsx - FIXED: Read Dispatch From from sheet, make it readonly
+// components/orders/DispatchModal.jsx - UPDATED: BillTo/ShipTo selection based on Dispatch From
 'use client';
 import { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
@@ -12,8 +12,13 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
   const [dispatchPlan, setDispatchPlan] = useState([]);
   const [shortageItems, setShortageItems] = useState([]);
   
-  // ✅ FIX: Read dispatchFrom from order data (from sheet), make it readonly
-  const dispatchFrom = order.dispatchFrom || 'Factory'; // Default to Factory if not specified
+  // Read dispatchFrom from order data (readonly)
+  const dispatchFrom = order.dispatchFrom || 'Factory';
+  
+  // BillTo/ShipTo selection
+  const [stockists, setStockists] = useState([]);
+  const [loadingStockists, setLoadingStockists] = useState(false);
+  const [billToShipTo, setBillToShipTo] = useState('');
   
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [showBatchSelector, setShowBatchSelector] = useState(false);
@@ -22,7 +27,36 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
 
   useEffect(() => {
     checkAvailability();
+    loadStockists();
   }, [order]);
+
+  async function loadStockists() {
+    // Only load stockists if dispatch from is NOT Factory
+    if (dispatchFrom === 'Factory') {
+      // For Factory, set default value
+      setBillToShipTo('Kairali Ayurvedic Products Pvt Ltd');
+      return;
+    }
+
+    setLoadingStockists(true);
+    try {
+      const response = await fetch('/api/stockists/list');
+      if (!response.ok) throw new Error('Failed to fetch stockists');
+      
+      const data = await response.json();
+      setStockists(data.stockists || []);
+      
+      // Set first stockist as default if available
+      if (data.stockists && data.stockists.length > 0) {
+        setBillToShipTo(data.stockists[0].name);
+      }
+    } catch (error) {
+      console.error('Error loading stockists:', error);
+      toast('Failed to load stockist list', 'error');
+    } finally {
+      setLoadingStockists(false);
+    }
+  }
 
   function checkAvailability() {
     setLoading(true);
@@ -107,6 +141,12 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
   };
 
   async function handleAutoDispatch() {
+    // Validate BillTo/ShipTo selection
+    if (!billToShipTo) {
+      toast('Please select BillTo/ShipTo party', 'error');
+      return;
+    }
+
     // For stockist dispatches, no batch validation needed
     if (dispatchFrom !== 'Factory') {
       await handleStockistDispatch();
@@ -144,6 +184,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
       formData.append('orderId', order.orderId);
       formData.append('dispatches', JSON.stringify(allDispatches));
       formData.append('dispatchFrom', dispatchFrom);
+      formData.append('billToShipTo', billToShipTo);
 
       // Send to server
       const response = await fetch('/api/orders/dispatch', {
@@ -188,6 +229,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
       formData.append('orderId', order.orderId);
       formData.append('dispatches', JSON.stringify(allDispatches));
       formData.append('dispatchFrom', dispatchFrom);
+      formData.append('billToShipTo', billToShipTo);
       formData.append('attachment', attachmentFile);
 
       // Send to server
@@ -239,7 +281,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
             <p className="text-sm text-gray-600">{order.items.length} items</p>
           </div>
 
-          {/* ✅ FIX: Read-only Dispatch From field */}
+          {/* Dispatch From - Readonly */}
           <div className={`rounded-lg p-4 border-2 ${
             dispatchFrom === 'Factory' 
               ? 'bg-blue-50 border-blue-200' 
@@ -249,7 +291,6 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
               Dispatch From <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-3">
-              {/* Display icon based on dispatch from */}
               <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                 dispatchFrom === 'Factory' ? 'bg-blue-600' : 'bg-orange-600'
               }`}>
@@ -277,17 +318,63 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
                 />
               </div>
             </div>
-            <div className={`mt-3 p-3 rounded-lg ${
-              dispatchFrom === 'Factory' ? 'bg-blue-100' : 'bg-orange-100'
-            }`}>
+          </div>
+
+          {/* BillTo/ShipTo Selection */}
+          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              BillTo/ShipTo <span className="text-red-500">*</span>
+            </label>
+            
+            {dispatchFrom === 'Factory' ? (
+              // Factory: Show readonly default value
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  value="Kairali Ayurvedic Products Pvt Ltd"
+                  readOnly
+                  className="flex-1 px-4 py-2.5 border-2 border-green-300 bg-green-100 text-green-900 rounded-lg font-semibold cursor-not-allowed"
+                />
+              </div>
+            ) : (
+              // Stockist: Show dropdown with active stockists
+              <div>
+                {loadingStockists ? (
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-2 border-green-300 bg-white rounded-lg">
+                    <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-gray-600">Loading stockists...</span>
+                  </div>
+                ) : (
+                  <select
+                    value={billToShipTo}
+                    onChange={(e) => setBillToShipTo(e.target.value)}
+                    className="w-full px-4 py-2.5 border-2 border-green-300 bg-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-medium text-gray-900"
+                  >
+                    <option value="">-- Select Stockist Party --</option>
+                    {stockists.map((stockist, index) => (
+                      <option key={index} value={stockist.name}>
+                        {stockist.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            <div className="mt-3 p-3 bg-green-100 rounded-lg">
               <p className="text-xs text-gray-700 flex items-start gap-2">
                 <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>
                   {dispatchFrom === 'Factory' 
-                    ? 'This order is configured for Factory dispatch. Batch tracking and FEFO allocation will be applied.'
-                    : `This order is configured for ${dispatchFrom} dispatch. Please upload the dispatch document from the stockist.`
+                    ? 'For Factory dispatches, BillTo/ShipTo is automatically set to Kairali Ayurvedic Products Pvt Ltd.'
+                    : 'Select the stockist party for this dispatch. Only active stockists are shown in the list.'
                   }
                 </span>
               </p>
@@ -440,6 +527,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
               onClick={handleAutoDispatch}
               disabled={
                 loading || 
+                !billToShipTo ||
                 (dispatchFrom === 'Factory' && !canDispatch) ||
                 (dispatchFrom !== 'Factory' && !attachmentFile)
               }
@@ -468,7 +556,7 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
   );
 }
 
-// Batch Selector Modal Component
+// Batch Selector Modal Component (unchanged)
 function BatchSelectorModal({ product, onClose, onSave }) {
   const [allocations, setAllocations] = useState(product.allocations);
 
@@ -518,7 +606,6 @@ function BatchSelectorModal({ product, onClose, onSave }) {
           </div>
         </div>
 
-        {/* Current Allocations */}
         <div className="space-y-2">
           <p className="text-sm font-semibold text-gray-700">Current Batch Allocation:</p>
           {allocations.map((alloc, index) => (
@@ -546,7 +633,6 @@ function BatchSelectorModal({ product, onClose, onSave }) {
           ))}
         </div>
 
-        {/* Available Batches */}
         <div className="space-y-2">
           <p className="text-sm font-semibold text-gray-700">Available Batches:</p>
           <div className="max-h-48 overflow-y-auto space-y-2">
