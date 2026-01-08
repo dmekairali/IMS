@@ -1,6 +1,4 @@
-// components/orders/DispatchModal.jsx - FIXED VERSION
-// Fix 1: Added pb-20 to prevent buttons being cut off by bottom bar
-// Fix 2: Made "Dispatch From" readonly field
+// components/orders/DispatchModal.jsx - FIXED: Read Dispatch From from sheet, make it readonly
 'use client';
 import { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
@@ -13,7 +11,10 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
   const [canDispatch, setCanDispatch] = useState(false);
   const [dispatchPlan, setDispatchPlan] = useState([]);
   const [shortageItems, setShortageItems] = useState([]);
-  const [dispatchFrom, setDispatchFrom] = useState('Factory');
+  
+  // ✅ FIX: Read dispatchFrom from order data (from sheet), make it readonly
+  const dispatchFrom = order.dispatchFrom || 'Factory'; // Default to Factory if not specified
+  
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [showBatchSelector, setShowBatchSelector] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -231,7 +232,6 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
   return (
     <>
       <Modal onClose={onClose} title="Auto Dispatch">
-        {/* ✅ FIX 1: Added pb-20 to create space for buttons at bottom */}
         <div className="space-y-4 pb-20">
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="font-semibold text-gray-800 mb-2">Order #{order.orderId}</h3>
@@ -239,29 +239,59 @@ export default function DispatchModal({ order, onClose, onSuccess }) {
             <p className="text-sm text-gray-600">{order.items.length} items</p>
           </div>
 
-          {/* ✅ FIX 2: Changed to readonly input with select-style dropdown */}
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+          {/* ✅ FIX: Read-only Dispatch From field */}
+          <div className={`rounded-lg p-4 border-2 ${
+            dispatchFrom === 'Factory' 
+              ? 'bg-blue-50 border-blue-200' 
+              : 'bg-orange-50 border-orange-200'
+          }`}>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Dispatch From <span className="text-red-500">*</span>
             </label>
-            <select
-              value={dispatchFrom}
-              onChange={(e) => setDispatchFrom(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-            >
-              <option value="Factory">Factory</option>
-              <option value="Stockist - Mumbai">Stockist - Mumbai</option>
-              <option value="Stockist - Delhi">Stockist - Delhi</option>
-              <option value="Stockist - Bangalore">Stockist - Bangalore</option>
-              <option value="Stockist - Chennai">Stockist - Chennai</option>
-              <option value="Stockist - Kolkata">Stockist - Kolkata</option>
-              <option value="Stockist - Hyderabad">Stockist - Hyderabad</option>
-              <option value="Stockist - Pune">Stockist - Pune</option>
-              <option value="Other">Other Stockist</option>
-            </select>
-            <p className="text-xs text-gray-600 mt-1">
-              Select "Factory" for warehouse dispatch, or choose stockist location
-            </p>
+            <div className="flex items-center gap-3">
+              {/* Display icon based on dispatch from */}
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                dispatchFrom === 'Factory' ? 'bg-blue-600' : 'bg-orange-600'
+              }`}>
+                {dispatchFrom === 'Factory' ? (
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={dispatchFrom}
+                  readOnly
+                  className={`w-full px-4 py-2.5 border-2 rounded-lg font-semibold ${
+                    dispatchFrom === 'Factory'
+                      ? 'bg-blue-100 border-blue-300 text-blue-900'
+                      : 'bg-orange-100 border-orange-300 text-orange-900'
+                  } cursor-not-allowed`}
+                />
+              </div>
+            </div>
+            <div className={`mt-3 p-3 rounded-lg ${
+              dispatchFrom === 'Factory' ? 'bg-blue-100' : 'bg-orange-100'
+            }`}>
+              <p className="text-xs text-gray-700 flex items-start gap-2">
+                <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>
+                  {dispatchFrom === 'Factory' 
+                    ? 'This order is configured for Factory dispatch. Batch tracking and FEFO allocation will be applied.'
+                    : `This order is configured for ${dispatchFrom} dispatch. Please upload the dispatch document from the stockist.`
+                  }
+                </span>
+              </p>
+            </div>
           </div>
 
           {/* Attachment Upload for Non-Factory Dispatches */}
