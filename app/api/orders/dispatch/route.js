@@ -72,11 +72,13 @@ export async function POST(request) {
 async function logToInOutFG(sheets, orderId, dispatches, dispatchFrom) {
   const spreadsheetId = '1Yxf9Hie-teHeJxIP8ucHoqU966ViSC7SCzxZhw0dn-E';
   
-  const currentDateTime = formatDateTime();
-  const date = formatDate();
+  // ✅ FIX: USE DISPLAY FORMAT (DD/MM/YYYY) for IN/OUT(FG) sheet
+  const { formatDateTimeDisplay, formatDateDisplay } = await import('@/lib/dateFormatter');
+  const currentDateTime = formatDateTimeDisplay();
+  const date = formatDateDisplay();
 
-  console.log(`🕒 IST DateTime: ${currentDateTime}`);
-  console.log(`📅 IST Date: ${date}`);
+  console.log(`🕒 IST DateTime (DD/MM/YYYY): ${currentDateTime}`);
+  console.log(`📅 IST Date (DD/MM/YYYY): ${date}`);
 
   // Get order details from DispatchData
   const orderSheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
