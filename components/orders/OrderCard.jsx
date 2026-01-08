@@ -1,4 +1,4 @@
-// components/orders/OrderCard.jsx - Updated with Invoice Link and date format
+// components/orders/OrderCard.jsx - FIXED: Correct MM/DD/YYYY date parsing
 'use client';
 import { useState } from 'react';
 import OrderDetails from './OrderDetails';
@@ -15,12 +15,15 @@ export default function OrderCard({ order, onDispatchSuccess, canDispatch, short
     try {
       let date;
       
-      // Check if date is in DD/MM/YYYY format (Google Sheets format)
+      // ✅ FIX: Parse MM/DD/YYYY format from Google Sheets
       if (typeof dateString === 'string' && dateString.includes('/')) {
-        // Parse DD/MM/YYYY HH:MM:SS format
-        const [datePart] = dateString.split(' ');
-        const [day, month, year] = datePart.split('/');
-        date = new Date(year, parseInt(month) - 1, day);
+        // Split into date and time parts
+        const parts = dateString.split(' ');
+        const datePart = parts[0]; // "12/5/2025"
+        const [month, day, year] = datePart.split('/');
+        
+        // ✅ CORRECT: month (0-indexed), day, year
+        date = new Date(year, parseInt(month) - 1, parseInt(day));
       } else {
         date = new Date(dateString);
       }
@@ -30,7 +33,7 @@ export default function OrderCard({ order, onDispatchSuccess, canDispatch, short
         return dateString;
       }
       
-      // Format as "2-May-2025"
+      // Format as "5-Dec-2025" (DD-MMM-YYYY)
       const day = date.getDate();
       const month = date.toLocaleDateString('en-US', { month: 'short' });
       const year = date.getFullYear();
