@@ -15,19 +15,22 @@ export default function ReportsPage() {
     loadBatches(true);
   }, []);
 
-  // Calculate inventory metrics
+  // Calculate inventory metrics - Group by product name
   const inventoryData = useMemo(() => {
     if (!batches || batches.length === 0) return {};
 
     const productMap = {};
 
     batches.forEach(batch => {
-      if (!productMap[batch.sku]) {
-        productMap[batch.sku] = {
-          sku: batch.sku,
-          productName: batch.descriptionName || batch.batchDescription || 'Unknown Product',
+      const productName = batch.descriptionName || batch.batchDescription || 'Unknown Product';
+      
+      if (!productMap[productName]) {
+        productMap[productName] = {
+          productName: productName,
+          skus: [], // Track all SKUs/package sizes
           totalStock: 0,
           batches: [],
+          variants: {}, // Track stock by package size
           oldestBatchDate: null,
           newestBatchDate: null,
           avgAge: 0,
@@ -36,8 +39,24 @@ export default function ReportsPage() {
         };
       }
 
-      const product = productMap[batch.sku];
+      const product = productMap[productName];
       product.totalStock += batch.remaining;
+      
+      // Track unique SKUs/package sizes
+      if (!product.skus.includes(batch.sku)) {
+        product.skus.push(batch.sku);
+      }
+
+      // Track stock by variant (package size)
+      if (!product.variants[batch.sku]) {
+        product.variants[batch.sku] = {
+          sku: batch.sku,
+          size: batch.size || 'Unknown',
+          stock: 0,
+          batches: []
+        };
+      }
+      product.variants[batch.sku].stock += batch.remaining;
       
       if (batch.remaining > 0) {
         const batchDate = new Date(batch.expiryDate || batch.batchDate);
@@ -46,14 +65,19 @@ export default function ReportsPage() {
           ? Math.floor((new Date(batch.expiryDate) - new Date()) / (1000 * 60 * 60 * 24))
           : null;
 
-        product.batches.push({
+        const batchInfo = {
           batchNo: batch.batchNo,
+          sku: batch.sku,
+          size: batch.size || 'Unknown',
           qty: batch.remaining,
           age: age,
           batchDate: batch.batchDate,
           expiryDate: batch.expiryDate,
           daysToExpiry: daysToExpiry
-        });
+        };
+
+        product.batches.push(batchInfo);
+        product.variants[batch.sku].batches.push(batchInfo);
 
         // Track oldest/newest
         if (!product.oldestBatchDate || batchDate < product.oldestBatchDate) {
@@ -387,7 +411,7 @@ function ProductCard({ product }) {
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <h3 className="font-bold text-gray-800 mb-1">{product.productName}</h3>
-            <p className="text-xs text-gray-500">SKU: {product.sku}</p>
+            <p className="text-xs text-gray-500">{product.skus.length} package size{product.skus.length > 1 ? 's' : ''}</p>
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={stockStatus} />
@@ -422,6 +446,24 @@ function ProductCard({ product }) {
           />
         </div>
 
+        {/* Package Size Summary */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {Object.values(product.variants).map((variant, index) => (
+            <div 
+              key={index}
+              className={`px-2 py-1 rounded text-xs font-medium ${
+                variant.stock === 0 
+                  ? 'bg-red-100 text-red-800 border border-red-300'
+                  : variant.stock < 50
+                  ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
+                  : 'bg-green-100 text-green-800 border border-green-300'
+              }`}
+            >
+              {variant.size}: {variant.stock}
+            </div>
+          ))}
+        </div>
+
         {product.nearExpiry > 0 && (
           <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-2 flex items-center gap-2">
             <span className="text-orange-600">⚠️</span>
@@ -433,21 +475,50 @@ function ProductCard({ product }) {
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-200 bg-gray-50 p-4">
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            Batch Details ({product.batches.length})
-          </h4>
-          
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {product.batches
-              .sort((a, b) => (a.daysToExpiry || 999999) - (b.daysToExpiry || 999999))
-              .map((batch, index) => (
-              <BatchRow key={index} batch={batch} />
-            ))}
-          </div>
+        <div className="border-t border-gray-200 bg-gray-50">
+          {/* Package Size Sections */}
+          {Object.entries(product.variants).map(([sku, variant], variantIndex) => (
+            <div key={variantIndex} className="border-b border-gray-200 last:border-b-0">
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <div>
+                      <h4 className="font-semibold text-gray-800">{variant.size}</h4>
+                      <p className="text-xs text-gray-500">SKU: {sku}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">Stock</p>
+                    <p className={`text-xl font-bold ${
+                      variant.stock === 0 ? 'text-red-700' :
+                      variant.stock < 50 ? 'text-yellow-700' :
+                      'text-green-700'
+                    }`}>
+                      {variant.stock}
+                    </p>
+                  </div>
+                </div>
+
+                <h5 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Batches ({variant.batches.length})
+                </h5>
+                
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {variant.batches
+                    .sort((a, b) => (a.daysToExpiry || 999999) - (b.daysToExpiry || 999999))
+                    .map((batch, batchIndex) => (
+                    <BatchRow key={batchIndex} batch={batch} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -500,7 +571,12 @@ function BatchRow({ batch }) {
       'bg-white border-gray-200'
     }`}>
       <div className="flex-1">
-        <p className="font-semibold text-gray-800 text-sm">{batch.batchNo}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-gray-800 text-sm">{batch.batchNo}</p>
+          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-300">
+            {batch.size}
+          </span>
+        </div>
         <div className="flex items-center gap-3 mt-1">
           <p className="text-xs text-gray-600">
             Mfg: {new Date(batch.batchDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -528,7 +604,7 @@ function BatchRow({ batch }) {
         )}
         <p className="text-xs text-gray-500 mt-1">Age: {batch.age} days</p>
       </div>
-      <div className="text-right">
+      <div className="text-right ml-3">
         <p className="text-xs text-gray-600">Qty</p>
         <p className="text-xl font-bold text-gray-800">{batch.qty}</p>
       </div>
