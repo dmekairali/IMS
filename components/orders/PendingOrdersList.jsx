@@ -1,4 +1,4 @@
-// components/orders/PendingOrdersList.jsx - With professional skeleton loader
+// components/orders/PendingOrdersList.jsx - UPDATED: Completely exclude dispatched orders
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
@@ -34,21 +34,13 @@ export default function PendingOrdersList() {
   function checkAllOrdersStock() {
     setCheckingStock(true);
     
-    // Filter out cancelled orders first
-    const activeOrders = orders.filter(order => order.status !== 'Order Cancel');
+    // ✅ MAJOR CHANGE: Filter out both cancelled AND dispatched orders
+    const activeOrders = orders.filter(order => 
+      order.status !== 'Order Cancel' && !order.dispatched
+    );
     
     const ordersWithStatus = activeOrders.map(order => {
-      // ✅ SKIP STOCK CHECK FOR DISPATCHED ORDERS
-      if (order.dispatched) {
-        return {
-          ...order,
-          canDispatch: false,
-          shortageInfo: [],
-          isAlreadyDispatched: true
-        };
-      }
-
-      // Only check stock for non-dispatched orders
+      // Check stock for all remaining orders
       const checks = order.items.map(item => {
         const availableBatches = getBatchesBySKU(item.sku);
         const totalAvailable = availableBatches.reduce((sum, batch) => sum + batch.remaining, 0);
@@ -68,8 +60,7 @@ export default function PendingOrdersList() {
       return {
         ...order,
         canDispatch: itemsWithShortage.length === 0,
-        shortageInfo: itemsWithShortage,
-        isAlreadyDispatched: false
+        shortageInfo: itemsWithShortage
       };
     });
 
@@ -87,11 +78,12 @@ export default function PendingOrdersList() {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
     
+    // ✅ SIMPLIFIED: No need to check for dispatched since they're already excluded
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'pending' ? !order.dispatched && order.status !== 'Order Cancel' :
-      filter === 'urgent' ? isUrgent(order.orderDate) && !order.dispatched :
-      filter === 'outofstock' ? !order.canDispatch && !order.dispatched : true;
+      filter === 'pending' ? order.canDispatch : // Orders with available stock
+      filter === 'urgent' ? isUrgent(order.orderDate) :
+      filter === 'outofstock' ? !order.canDispatch : true; // Orders with insufficient stock
     
     return matchesSearch && matchesFilter;
   });
@@ -101,7 +93,10 @@ export default function PendingOrdersList() {
   
   if (error) return <ErrorMessage message={error} onRetry={handleRefresh} />;
 
-  const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch && !o.dispatched).length;
+  // ✅ SIMPLIFIED: Calculate counts (all orders are non-dispatched now)
+  const pendingCount = ordersWithStockStatus.filter(o => o.canDispatch).length;
+  const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch).length;
+  const urgentCount = ordersWithStockStatus.filter(o => isUrgent(o.orderDate)).length;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -129,20 +124,46 @@ export default function PendingOrdersList() {
         </div>
 
         <div className="flex gap-2 px-4 pb-3 overflow-x-auto hide-scrollbar">
-          {['all', 'pending', 'urgent', 'outofstock'].map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                filter === f 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 active:bg-gray-200'
-              }`}
-            >
-              {f === 'outofstock' ? `Out of Stock${outOfStockCount > 0 ? ` (${outOfStockCount})` : ''}` : 
-               f.charAt(0).toUpperCase() + f.slice(1)}
-            </button>
-          ))}
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+              filter === 'all' 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-100 text-gray-700 active:bg-gray-200'
+            }`}
+          >
+            All ({ordersWithStockStatus.length})
+          </button>
+          <button
+            onClick={() => setFilter('pending')}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+              filter === 'pending' 
+                ? 'bg-green-600 text-white' 
+                : 'bg-gray-100 text-gray-700 active:bg-gray-200'
+            }`}
+          >
+            ✓ Ready to Dispatch ({pendingCount})
+          </button>
+          <button
+            onClick={() => setFilter('urgent')}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+              filter === 'urgent' 
+                ? 'bg-red-600 text-white' 
+                : 'bg-gray-100 text-gray-700 active:bg-gray-200'
+            }`}
+          >
+            🔴 Urgent ({urgentCount})
+          </button>
+          <button
+            onClick={() => setFilter('outofstock')}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+              filter === 'outofstock' 
+                ? 'bg-orange-600 text-white' 
+                : 'bg-gray-100 text-gray-700 active:bg-gray-200'
+            }`}
+          >
+            ⚠️ Out of Stock ({outOfStockCount})
+          </button>
         </div>
       </div>
 
@@ -151,7 +172,11 @@ export default function PendingOrdersList() {
           <EmptyState message={
             filter === 'outofstock' 
               ? 'No orders with stock shortage' 
-              : 'No orders found'
+              : filter === 'pending'
+              ? 'No orders ready to dispatch'
+              : filter === 'urgent'
+              ? 'No urgent orders'
+              : 'No pending orders found'
           } />
         ) : (
           filteredOrders.map(order => (
