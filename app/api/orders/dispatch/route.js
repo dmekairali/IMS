@@ -1,5 +1,4 @@
-// app/api/orders/dispatch/route.js - COMPLETE FIX
-// Updated with IN/OUT(FG) + IST Timezone + USER_ENTERED for proper dates
+// app/api/orders/dispatch/route.js - UPDATED: Save billToShipTo value to sheet
 import { getSheets, clearBatchCache } from '@/lib/googleSheets';
 import { uploadAttachmentToDrive } from '@/lib/googleDrive';
 import { formatDateTime, formatDate } from '@/lib/dateFormatter';
@@ -10,7 +9,8 @@ export async function POST(request) {
     const orderIdRaw = formData.get('orderId');
     const dispatchesRaw = formData.get('dispatches');
     const dispatchFrom = formData.get('dispatchFrom');
-    const attachmentFile = formData.get('attachment'); // For non-factory dispatches
+    const billToShipTo = formData.get('billToShipTo'); // ✅ NEW
+    const attachmentFile = formData.get('attachment');
     
     const orderId = orderIdRaw;
     const dispatches = JSON.parse(dispatchesRaw);
@@ -18,11 +18,12 @@ export async function POST(request) {
     console.log('📦 Dispatch Request:', {
       orderId,
       dispatchFrom,
+      billToShipTo, // ✅ NEW
       dispatchCount: dispatches?.length,
       hasAttachment: !!attachmentFile
     });
 
-    if (!orderId || !dispatches || dispatches.length === 0 || !dispatchFrom) {
+    if (!orderId || !dispatches || dispatches.length === 0 || !dispatchFrom || !billToShipTo) {
       return Response.json({ error: 'Invalid request data' }, { status: 400 });
     }
 
@@ -49,8 +50,8 @@ export async function POST(request) {
       console.log('⏭️ Skipping IN/OUT(FG) logging for Stockist dispatch');
     }
 
-    // 2. Update DispatchData sheet
-    await updateDispatchData(sheets, orderId, dispatches, dispatchFrom, attachmentLink);
+    // 2. Update DispatchData sheet (✅ Now includes billToShipTo)
+    await updateDispatchData(sheets, orderId, dispatches, dispatchFrom, billToShipTo, attachmentLink);
 
     // 3. Clear batch cache to force refresh (only for factory dispatches)
     if (dispatchFrom === 'Factory') {
@@ -71,8 +72,6 @@ export async function POST(request) {
 async function logToInOutFG(sheets, orderId, dispatches, dispatchFrom) {
   const spreadsheetId = '1Yxf9Hie-teHeJxIP8ucHoqU966ViSC7SCzxZhw0dn-E';
   
-  // Format: DD/MM/YYYY HH:MM:SS and DD/MM/YYYY
-  // ✅ Now uses Indian Standard Time (IST - Asia/Kolkata)
   const currentDateTime = formatDateTime();
   const date = formatDate();
 
@@ -103,28 +102,24 @@ async function logToInOutFG(sheets, orderId, dispatches, dispatchFrom) {
     }
   }
 
-  // IN/OUT(FG) columns:
-  // TimeStamp | IN/OUT | Date | FG/RM/PM | Description | Sku | Qty | Transaction Type | 
-  // Invoice N./ Batch N. | PO Number | Cost | Cost (without tax) | RefrenceID | Client Name | UID | Invoice | Remarks
-  
   const rows = dispatches.map(dispatch => [
-    currentDateTime,           // TimeStamp (DD/MM/YYYY HH:MM:SS) - IST
-    'OUT',                     // IN/OUT
-    date,                      // Date (DD/MM/YYYY) - IST
-    'FG',                      // FG/RM/PM
-    dispatch.productName || '', // Description
-    dispatch.sku,              // Sku
-    dispatch.qty,              // Qty
-    'New Order FMS',           // Transaction Type
-    dispatch.batchNo || '',    // Invoice N./ Batch N. (Batch Number for Factory, empty for Stockist)
-    '',                        // PO Number
-    '',                        // Cost
-    '',                        // Cost (without tax)
-    orderId,                   // RefrenceID
-    clientName,                // Client Name
-    '',                        // UID
-    invoiceNo,                 // Invoice
-    dispatchFrom !== 'Factory' ? `Dispatched from ${dispatchFrom}` : '' // Remarks
+    currentDateTime,
+    'OUT',
+    date,
+    'FG',
+    dispatch.productName || '',
+    dispatch.sku,
+    dispatch.qty,
+    'New Order FMS',
+    dispatch.batchNo || '',
+    '',
+    '',
+    '',
+    orderId,
+    clientName,
+    '',
+    invoiceNo,
+    dispatchFrom !== 'Factory' ? `Dispatched from ${dispatchFrom}` : ''
   ]);
 
   console.log(`📝 Logging ${rows.length} entries to IN/OUT(FG) with IST timestamps`);
@@ -132,25 +127,24 @@ async function logToInOutFG(sheets, orderId, dispatches, dispatchFrom) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: 'IN/OUT(FG)!A:Q',
-    valueInputOption: 'USER_ENTERED', // ✅ Changed from 'RAW' to 'USER_ENTERED' for proper date parsing
+    valueInputOption: 'USER_ENTERED',
     resource: {
       values: rows
     }
   });
 
-  console.log('✅ IN/OUT(FG) logging completed with proper date format');
+  console.log('✅ IN/OUT(FG) logging completed');
 }
 
-async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, attachmentLink) {
+async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, billToShipTo, attachmentLink) {
   const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
   
-  // Format: DD/MM/YYYY HH:MM:SS - IST
   const currentDateTime = formatDateTime();
 
   // 1. Find the row with this Order ID
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: 'DispatchData!A1:Z',
+    range: 'DispatchData!A1:AE',
   });
 
   const rows = response.data.values || [];
@@ -161,14 +155,14 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
   const dispatchedCol = headers.findIndex(h => h === 'Dispatched');
   const dispatchedDateCol = headers.findIndex(h => h === 'Dispatched Date');
   const piTotalCol = headers.findIndex(h => h === 'PI Total');
-  const billToShipToCol = headers.findIndex(h => h === 'BillTo/ShipTo');
+  const billToShipToCol = headers.findIndex(h => h === 'BillTo/ShipTo'); // ✅ NEW
   const attachmentCol = headers.findIndex(h => h === 'Attachment');
 
   // Find row index
   let rowIndex = -1;
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][orderIdCol] === orderId) {
-      rowIndex = i + 1; // Sheet is 1-indexed
+      rowIndex = i + 1;
       break;
     }
   }
@@ -179,11 +173,6 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
 
   // Calculate total quantity
   const totalQty = dispatches.reduce((sum, d) => sum + d.qty, 0);
-
-  // Determine BillTo/ShipTo value
-  const billToShipToValue = dispatchFrom === 'Factory' 
-    ? 'Kairali Ayurvedic Products Pvt Ltd' 
-    : dispatchFrom;
 
   // 2. Update columns
   const updates = [];
@@ -196,7 +185,7 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
     });
   }
 
-  // Dispatched Date (DD/MM/YYYY HH:MM:SS) - IST
+  // Dispatched Date
   if (dispatchedDateCol !== -1) {
     updates.push({
       range: `DispatchData!${indexToColumn(dispatchedDateCol)}${rowIndex}`,
@@ -212,12 +201,13 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
     });
   }
 
-  // BillTo/ShipTo
+  // ✅ BillTo/ShipTo - Save selected value
   if (billToShipToCol !== -1) {
     updates.push({
       range: `DispatchData!${indexToColumn(billToShipToCol)}${rowIndex}`,
-      values: [[billToShipToValue]]
+      values: [[billToShipTo]]
     });
+    console.log(`✅ BillTo/ShipTo set to: ${billToShipTo}`);
   }
 
   // Attachment (only for non-factory dispatches)
@@ -229,19 +219,18 @@ async function updateDispatchData(sheets, orderId, dispatches, dispatchFrom, att
   }
 
   // Batch update all fields
-  // ✅ Using USER_ENTERED for proper date handling
   for (const update of updates) {
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: update.range,
-      valueInputOption: 'USER_ENTERED', // ✅ Changed from 'RAW' to 'USER_ENTERED'
+      valueInputOption: 'USER_ENTERED',
       resource: {
         values: update.values
       }
     });
   }
 
-  console.log('✅ DispatchData updated successfully with IST timestamps');
+  console.log('✅ DispatchData updated successfully');
 }
 
 function indexToColumn(index) {
