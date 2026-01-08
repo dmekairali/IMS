@@ -1,4 +1,4 @@
-// components/orders/PendingOrdersList.jsx - UPDATED: Completely exclude dispatched orders
+// components/orders/PendingOrdersList.jsx - FIXED: Proper order removal after dispatch
 'use client';
 import { useState, useEffect } from 'react';
 import OrderCard from './OrderCard';
@@ -10,7 +10,7 @@ import { useData } from '@/contexts/DataContext';
 import { useBatches } from '@/hooks/useBatches';
 
 export default function PendingOrdersList() {
-  const { orders, loading, error, refreshData } = useData();
+  const { orders, loading, error, refreshData, removeOrder } = useData();
   const { loadBatches, getBatchesBySKU } = useBatches();
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,7 +34,7 @@ export default function PendingOrdersList() {
   function checkAllOrdersStock() {
     setCheckingStock(true);
     
-    // ✅ MAJOR CHANGE: Filter out both cancelled AND dispatched orders
+    // ✅ Filter out both cancelled AND dispatched orders
     const activeOrders = orders.filter(order => 
       order.status !== 'Order Cancel' && !order.dispatched
     );
@@ -74,16 +74,28 @@ export default function PendingOrdersList() {
     checkAllOrdersStock();
   };
 
+  // ✅ NEW: Handle order dispatch completion
+  const handleDispatchSuccess = (orderId) => {
+    console.log(`✅ Order ${orderId} dispatched - removing from list`);
+    
+    // Remove from global cache (DataContext)
+    removeOrder(orderId);
+    
+    // Also remove from local state immediately for instant UI update
+    setOrdersWithStockStatus(prev => 
+      prev.filter(order => order.orderId !== orderId)
+    );
+  };
+
   const filteredOrders = ordersWithStockStatus.filter(order => {
     const matchesSearch = order.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.orderId?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // ✅ SIMPLIFIED: No need to check for dispatched since they're already excluded
     const matchesFilter = 
       filter === 'all' ? true :
-      filter === 'pending' ? order.canDispatch : // Orders with available stock
+      filter === 'pending' ? order.canDispatch :
       filter === 'urgent' ? isUrgent(order.orderDate) :
-      filter === 'outofstock' ? !order.canDispatch : true; // Orders with insufficient stock
+      filter === 'outofstock' ? !order.canDispatch : true;
     
     return matchesSearch && matchesFilter;
   });
@@ -93,7 +105,7 @@ export default function PendingOrdersList() {
   
   if (error) return <ErrorMessage message={error} onRetry={handleRefresh} />;
 
-  // ✅ SIMPLIFIED: Calculate counts (all orders are non-dispatched now)
+  // Calculate counts
   const pendingCount = ordersWithStockStatus.filter(o => o.canDispatch).length;
   const outOfStockCount = ordersWithStockStatus.filter(o => !o.canDispatch).length;
   const urgentCount = ordersWithStockStatus.filter(o => isUrgent(o.orderDate)).length;
@@ -183,7 +195,7 @@ export default function PendingOrdersList() {
             <OrderCard 
               key={order.orderId} 
               order={order} 
-              onRefresh={handleRefresh}
+              onDispatchSuccess={handleDispatchSuccess}
               canDispatch={order.canDispatch}
               shortageInfo={order.shortageInfo}
             />
