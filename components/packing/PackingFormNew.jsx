@@ -1,3 +1,4 @@
+// components/packing/PackingFormNew.jsx - COMPLETE with Product Split Feature
 'use client';
 import { useState, useMemo } from 'react';
 
@@ -5,11 +6,13 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
   const [packingItems, setPackingItems] = useState(() => {
     // Initialize packing items from products
     const orderProducts = products.filter(p => p.oid === order.orderId);
-    return orderProducts.map(product => ({
+    return orderProducts.map((product, index) => ({
+      id: Date.now() + index, // ✅ Unique ID for each row
       sku: product.sku || '',
       productName: product.productName || '',
       package: product.package || '',
       orderedQty: parseInt(product.quantity) || 0,
+      originalQty: parseInt(product.quantity) || 0, // ✅ Track original quantity
       boxNo: 1,
     }));
   });
@@ -20,9 +23,70 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleBoxNoChange = (index, value) => {
-    const newItems = [...packingItems];
-    newItems[index].boxNo = parseInt(value) || 1;
+  const handleBoxNoChange = (id, value) => {
+    const newItems = packingItems.map(item =>
+      item.id === id ? { ...item, boxNo: parseInt(value) || 1 } : item
+    );
+    setPackingItems(newItems);
+  };
+
+  // ✅ NEW: Update quantity for a specific row
+  const handleQuantityChange = (id, value) => {
+    const newQty = parseInt(value) || 0;
+    const newItems = packingItems.map(item =>
+      item.id === id ? { ...item, orderedQty: newQty } : item
+    );
+    setPackingItems(newItems);
+  };
+
+  // ✅ NEW: Split product into multiple rows
+  const handleSplitProduct = (id) => {
+    const itemToSplit = packingItems.find(item => item.id === id);
+    if (!itemToSplit) return;
+
+    // Create a duplicate with half quantity (rounded down)
+    const splitQty = Math.floor(itemToSplit.orderedQty / 2);
+    const remainingQty = itemToSplit.orderedQty - splitQty;
+
+    if (splitQty === 0 || remainingQty === 0) {
+      setErrorMessage('Cannot split - quantity too small');
+      setShowErrorModal(true);
+      return;
+    }
+
+    const newItems = packingItems.flatMap(item => {
+      if (item.id === id) {
+        return [
+          { ...item, orderedQty: remainingQty }, // Original row with remaining qty
+          { 
+            ...item, 
+            id: Date.now() + Math.random(), // New unique ID
+            orderedQty: splitQty,
+            boxNo: item.boxNo + 1 // Next box number
+          }
+        ];
+      }
+      return item;
+    });
+
+    setPackingItems(newItems);
+  };
+
+  // ✅ NEW: Remove a split row
+  const handleRemoveRow = (id) => {
+    const itemToRemove = packingItems.find(item => item.id === id);
+    if (!itemToRemove) return;
+
+    // Don't allow removal if it's the only row for this SKU
+    const sameSKUCount = packingItems.filter(item => item.sku === itemToRemove.sku).length;
+
+    if (sameSKUCount <= 1) {
+      setErrorMessage('Cannot remove the only row for this product');
+      setShowErrorModal(true);
+      return;
+    }
+
+    const newItems = packingItems.filter(item => item.id !== id);
     setPackingItems(newItems);
   };
 
@@ -38,7 +102,49 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
     return Math.max(...packingItems.map(item => item.boxNo));
   }, [packingItems]);
 
+  // ✅ Validate quantities match original order
+  const validateQuantities = () => {
+    const quantityByProduct = {};
+    
+    // Sum quantities by SKU
+    packingItems.forEach(item => {
+      if (!quantityByProduct[item.sku]) {
+        quantityByProduct[item.sku] = { total: 0, original: item.originalQty, name: item.productName };
+      }
+      quantityByProduct[item.sku].total += item.orderedQty;
+    });
+
+    // Check against original order
+    for (const sku in quantityByProduct) {
+      const { total, original, name } = quantityByProduct[sku];
+      
+      if (total !== original) {
+        return {
+          valid: false,
+          message: `Quantity mismatch for ${getDisplayName(name)}:\nExpected: ${original}, Current Total: ${total}\n\nPlease adjust quantities to match the original order.`
+        };
+      }
+
+      if (total === 0) {
+        return {
+          valid: false,
+          message: `Zero quantity not allowed for ${getDisplayName(name)}`
+        };
+      }
+    }
+
+    return { valid: true };
+  };
+
   const generatePackingDocuments = async () => {
+    // ✅ Validate before generating
+    const validation = validateQuantities();
+    if (!validation.valid) {
+      setErrorMessage(validation.message);
+      setShowErrorModal(true);
+      return;
+    }
+
     if (packingItems.length === 0) return;
 
     setGenerating(true);
@@ -91,6 +197,16 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
 
   // Check if order already has packing documents
   const isCompleted = order.hasPacking;
+
+  // ✅ Get quantity summary for each SKU
+  const getQuantitySummary = (sku) => {
+    const items = packingItems.filter(item => item.sku === sku);
+    const totalCurrent = items.reduce((sum, item) => sum + item.orderedQty, 0);
+    const original = items[0]?.originalQty || 0;
+    const isValid = totalCurrent === original;
+    
+    return { totalCurrent, original, isValid };
+  };
 
   return (
     <>
@@ -211,6 +327,23 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
         <div className="p-6">
           <h5 className="text-lg font-semibold text-teal-600 mb-4">Product Details</h5>
           
+          {/* Info Banner */}
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 mb-4">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm text-blue-900 font-semibold mb-1">
+                  💡 Split Products Across Boxes
+                </p>
+                <p className="text-xs text-blue-800">
+                  Use the <strong>✂️ Split</strong> button to divide a product into multiple boxes. Adjust quantities as needed. Total must match the original order quantity.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-gray-300">
               <thead>
@@ -221,39 +354,103 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
                   <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm w-24">
                     Package
                   </th>
-                  <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm bg-teal-600 text-white w-24">
+                  <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm bg-teal-600 text-white w-28">
                     Qty
                   </th>
                   <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm bg-teal-600 text-white w-24">
                     Box No
                   </th>
+                  <th className="border border-gray-300 px-3 py-2 text-center font-semibold text-sm w-28">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {packingItems.map((item, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="border border-gray-300 px-3 py-2 text-sm">
-                      {getDisplayName(item.productName)}
-                      <div className="text-xs text-gray-500 mt-1">{item.sku}</div>
-                    </td>
-                    <td className="border border-gray-300 px-3 py-2 text-center text-sm">
-                      {item.package}
-                    </td>
-                    <td className="border border-gray-300 px-3 py-2 text-center text-sm font-semibold">
-                      {item.orderedQty}
-                    </td>
-                    <td className="border border-gray-300 px-3 py-2 text-center">
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-center"
-                        value={item.boxNo}
-                        onChange={(e) => handleBoxNoChange(index, e.target.value)}
-                        disabled={isCompleted}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {packingItems.map((item, index) => {
+                  const sameSKUItems = packingItems.filter(i => i.sku === item.sku);
+                  const sameSKUCount = sameSKUItems.length;
+                  const splitIndex = sameSKUItems.findIndex(i => i.id === item.id) + 1;
+                  const summary = getQuantitySummary(item.sku);
+                  
+                  return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 px-3 py-2 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            {getDisplayName(item.productName)}
+                            <div className="text-xs text-gray-500 mt-1">{item.sku}</div>
+                            {sameSKUCount > 1 && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs text-blue-600 font-semibold">
+                                  📦 Split {splitIndex}/{sameSKUCount}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Quantity Status Indicator */}
+                          {splitIndex === sameSKUCount && (
+                            <div className={`text-xs px-2 py-1 rounded-full font-semibold whitespace-nowrap ${
+                              summary.isValid 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {summary.isValid ? '✓' : '⚠️'} {summary.totalCurrent}/{summary.original}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="border border-gray-300 px-3 py-2 text-center text-sm">
+                        {item.package}
+                      </td>
+                      <td className="border border-gray-300 px-3 py-2 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-center font-semibold"
+                          value={item.orderedQty}
+                          onChange={(e) => handleQuantityChange(item.id, e.target.value)}
+                          disabled={isCompleted}
+                        />
+                      </td>
+                      <td className="border border-gray-300 px-3 py-2 text-center">
+                        <input
+                          type="number"
+                          min="1"
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-center font-semibold"
+                          value={item.boxNo}
+                          onChange={(e) => handleBoxNoChange(item.id, e.target.value)}
+                          disabled={isCompleted}
+                        />
+                      </td>
+                      <td className="border border-gray-300 px-3 py-2 text-center">
+                        <div className="flex justify-center gap-1">
+                          {/* Split Button */}
+                          <button
+                            onClick={() => handleSplitProduct(item.id)}
+                            disabled={isCompleted || item.orderedQty < 2}
+                            className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            title="Split product across boxes"
+                          >
+                            ✂️ Split
+                          </button>
+                          
+                          {/* Remove Button (only show if product is split) */}
+                          {sameSKUCount > 1 && (
+                            <button
+                              onClick={() => handleRemoveRow(item.id)}
+                              disabled={isCompleted}
+                              className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              title="Remove this split"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -262,6 +459,41 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
             <p className="text-sm text-blue-800">
               <strong>Total Boxes:</strong> {totalBoxes}
             </p>
+          </div>
+
+          {/* Quantity Validation Summary */}
+          <div className="mt-4">
+            {Object.keys(packingItems.reduce((acc, item) => {
+              acc[item.sku] = true;
+              return acc;
+            }, {})).map(sku => {
+              const summary = getQuantitySummary(sku);
+              const item = packingItems.find(i => i.sku === sku);
+              
+              if (!summary.isValid) {
+                return (
+                  <div key={sku} className="bg-red-50 border border-red-200 rounded-lg p-3 mb-2">
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">⚠️</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-red-900">
+                          {getDisplayName(item.productName)}
+                        </p>
+                        <p className="text-xs text-red-800">
+                          Current Total: <strong>{summary.totalCurrent}</strong> | 
+                          Expected: <strong>{summary.original}</strong> | 
+                          Difference: <strong className="text-red-600">
+                            {summary.totalCurrent - summary.original > 0 ? '+' : ''}
+                            {summary.totalCurrent - summary.original}
+                          </strong>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })}
           </div>
 
           {/* Action Buttons */}
@@ -396,7 +628,7 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
 
           {/* Document Links */}
           <div className="space-y-3 mb-6">
-            <a
+            
               href={generatedLinks.packingListLink}
               target="_blank"
               rel="noopener noreferrer"
@@ -416,7 +648,7 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
               </svg>
             </a>
 
-            <a
+            
               href={generatedLinks.stickerLink}
               target="_blank"
               rel="noopener noreferrer"
@@ -482,16 +714,16 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
 
           {/* Title */}
           <h3 className="text-xl font-bold text-gray-800 text-center mb-2">
-            Generation Failed
+            {errorMessage.includes('mismatch') ? 'Quantity Validation Failed' : 'Operation Failed'}
           </h3>
           
           <p className="text-sm text-gray-600 text-center mb-6">
-            There was an error generating your packing documents.
+            {errorMessage.includes('mismatch') ? 'Please adjust quantities to match the original order.' : 'An error occurred. Please try again.'}
           </p>
 
           {/* Error Message */}
           <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-red-800 font-mono break-words">
+            <p className="text-sm text-red-800 whitespace-pre-line">
               {errorMessage}
             </p>
           </div>
@@ -504,15 +736,17 @@ export default function PackingForm({ order, products, onCancel, onSuccess }) {
             >
               Close
             </button>
-            <button
-              onClick={() => {
-                setShowErrorModal(false);
-                generatePackingDocuments();
-              }}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-sm"
-            >
-              Try Again
-            </button>
+            {!errorMessage.includes('mismatch') && (
+              <button
+                onClick={() => {
+                  setShowErrorModal(false);
+                  generatePackingDocuments();
+                }}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-sm"
+              >
+                Try Again
+              </button>
+            )}
           </div>
         </div>
       </div>
