@@ -12,17 +12,17 @@ export default function LiveStockTracker({ products }) {
   // Filter out discontinued products and prepare data
   const activeProducts = useMemo(() => {
     return products
-      .filter(p => p.status === 'Shortlisted -FG')
+      .filter(p => p.status !== 'Discontinue')
       .map(p => ({
         ...p,
         packingSize: `${p.size || ''} ${p.unit || ''}`.trim() || 'N/A',
-        searchText: `${p.description} ${p.sku} ${p.brand} ${p.category}`.toLowerCase()
+        searchText: `${p.description} ${p.sku} ${p.subCategory}`.toLowerCase()
       }));
   }, [products]);
 
-  // Get unique categories for filter
+  // Get unique sub-categories for filter
   const categories = useMemo(() => {
-    const cats = new Set(activeProducts.map(p => p.category).filter(Boolean));
+    const cats = new Set(activeProducts.map(p => p.subCategory).filter(Boolean));
     return ['all', ...Array.from(cats)].sort();
   }, [activeProducts]);
 
@@ -38,7 +38,7 @@ export default function LiveStockTracker({ products }) {
 
     // Category filter
     if (categoryFilter !== 'all') {
-      filtered = filtered.filter(p => p.category === categoryFilter);
+      filtered = filtered.filter(p => p.subCategory === categoryFilter);
     }
 
     // Stock status filter
@@ -68,17 +68,13 @@ export default function LiveStockTracker({ products }) {
           aVal = a.description || '';
           bVal = b.description || '';
           break;
-        case 'sku':
-          aVal = a.sku || '';
-          bVal = b.sku || '';
-          break;
         case 'stock':
           aVal = a.currentStock || 0;
           bVal = b.currentStock || 0;
           break;
-        case 'category':
-          aVal = a.category || '';
-          bVal = b.category || '';
+        case 'subCategory':
+          aVal = a.subCategory || '';
+          bVal = b.subCategory || '';
           break;
         case 'packing':
           aVal = a.packingSize;
@@ -227,17 +223,17 @@ export default function LiveStockTracker({ products }) {
             </label>
             <input
               type="text"
-              placeholder="Search by name, SKU, brand, category..."
+              placeholder="Search by name, SKU, sub-category..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
 
-          {/* Category Filter */}
+          {/* Sub Category Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              📂 Category
+              📂 Sub Category
             </label>
             <select
               value={categoryFilter}
@@ -246,7 +242,7 @@ export default function LiveStockTracker({ products }) {
             >
               {categories.map(cat => (
                 <option key={cat} value={cat}>
-                  {cat === 'all' ? 'All Categories' : cat}
+                  {cat === 'all' ? 'All Sub Categories' : cat}
                 </option>
               ))}
             </select>
@@ -281,9 +277,8 @@ export default function LiveStockTracker({ products }) {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             >
               <option value="description">Product Name</option>
-              <option value="sku">SKU</option>
               <option value="stock">Stock Quantity</option>
-              <option value="category">Category</option>
+              <option value="subCategory">Sub Category</option>
               <option value="packing">Packing Size</option>
             </select>
           </div>
@@ -300,7 +295,7 @@ export default function LiveStockTracker({ products }) {
             )}
             {categoryFilter !== 'all' && (
               <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-2">
-                Category: {categoryFilter}
+                Sub Category: {categoryFilter}
                 <button onClick={() => setCategoryFilter('all')} className="hover:text-blue-900">×</button>
               </span>
             )}
@@ -330,15 +325,6 @@ export default function LiveStockTracker({ products }) {
                   </div>
                 </th>
                 <th 
-                  onClick={() => handleSort('sku')}
-                  className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    SKU
-                    <SortIcon column="sku" />
-                  </div>
-                </th>
-                <th 
                   onClick={() => handleSort('packing')}
                   className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 >
@@ -348,12 +334,12 @@ export default function LiveStockTracker({ products }) {
                   </div>
                 </th>
                 <th 
-                  onClick={() => handleSort('category')}
+                  onClick={() => handleSort('subCategory')}
                   className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    Category
-                    <SortIcon column="category" />
+                    Sub Category
+                    <SortIcon column="subCategory" />
                   </div>
                 </th>
                 <th 
@@ -373,7 +359,7 @@ export default function LiveStockTracker({ products }) {
             <tbody className="divide-y divide-gray-200">
               {filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan="5" className="px-4 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-3">
                       <svg className="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -389,13 +375,10 @@ export default function LiveStockTracker({ products }) {
                     <td className="px-4 py-3">
                       <div>
                         <p className="font-medium text-gray-900">{product.description || 'N/A'}</p>
-                        {product.brand && (
-                          <p className="text-xs text-gray-500 mt-0.5">Brand: {product.brand}</p>
+                        {product.sku && (
+                          <p className="text-xs text-gray-500 mt-0.5 font-mono">SKU: {product.sku}</p>
                         )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700 font-mono">
-                      {product.sku || 'N/A'}
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -403,7 +386,7 @@ export default function LiveStockTracker({ products }) {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {product.category || 'N/A'}
+                      {product.subCategory || 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-lg font-bold text-gray-900">
