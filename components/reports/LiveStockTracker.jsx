@@ -12,7 +12,7 @@ export default function LiveStockTracker({ products }) {
   // Filter out discontinued products and prepare data
   const activeProducts = useMemo(() => {
     return products
-      .filter(p => p.status !== 'Discontinue')
+      .filter(p => p.status === 'Shortlisted -FG')
       .map(p => ({
         ...p,
         packingSize: `${p.size || ''} ${p.unit || ''}`.trim() || 'N/A',
