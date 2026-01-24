@@ -13,7 +13,7 @@ export async function GET(request) {
 
   try {
     const sheets = await getSheets();
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_BATCHES;
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_FG;
 
     // Fetch Finished Goods sheet (header row = 2)
     const response = await sheets.spreadsheets.values.get({
