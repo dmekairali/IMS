@@ -195,6 +195,7 @@ export default function ReportsPage() {
               <OverviewDashboard 
                 finishedGoods={products}
                 batches={batches}
+                metadata={metadata}
               />
             )}
             
