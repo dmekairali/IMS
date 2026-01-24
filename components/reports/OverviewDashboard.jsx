@@ -3,6 +3,7 @@
 import ExecutiveDashboard from './ExecutiveDashboard';
 
 // This is an alias to maintain naming consistency
-export default function OverviewDashboard({ finishedGoods, batches }) {
-  return <ExecutiveDashboard products={finishedGoods} batches={batches} />;
+
+export default function OverviewDashboard({ finishedGoods, batches, metadata }) {
+  return <ExecutiveDashboard products={finishedGoods} batches={batches} metadata={metadata} />;
 }
