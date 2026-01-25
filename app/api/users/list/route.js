@@ -12,24 +12,55 @@ export async function GET(request) {
   };
 
   try {
+    console.log('🔍 Fetching users from UserAccess sheet...');
+    
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_IMS;
+    
+    if (!spreadsheetId) {
+      console.error('❌ GOOGLE_SHEETS_SPREADSHEET_ID_IMS not set');
+      return Response.json({ 
+        success: false,
+        error: 'IMS spreadsheet ID not configured. Please add GOOGLE_SHEETS_SPREADSHEET_ID_IMS to environment variables.' 
+      }, { status: 500, headers });
+    }
+    
+    console.log('📄 Using spreadsheet ID:', spreadsheetId);
+    
     const sheets = await getSheets();
-    const spreadsheetId = '1A5_fHur2RgnCpOmRKDiUVlH2KanW5dcDS2L8pExyTtc'; // Your IMS spreadsheet
+    console.log('📄 Using spreadsheet ID:', spreadsheetId);
+    
+    const sheets = await getSheets();
     
     // Fetch from UserAccess sheet
+    console.log('📡 Fetching UserAccess sheet data...');
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'UserAccess!A1:Z50', // Get all data with headers
+      range: 'UserAccess!A1:Z', // Get all data with headers
     });
 
     const rows = response.data.values || [];
+    console.log(`📊 Received ${rows.length} rows from UserAccess sheet`);
     
     if (rows.length < 2) {
-      return Response.json({ users: [] }, { headers });
+      console.warn('⚠️ No user data found in UserAccess sheet');
+      return Response.json({ 
+        success: true,
+        users: [],
+        message: 'No users found in UserAccess sheet'
+      }, { headers });
     }
 
     // First row is headers
     const headerRow = rows[0];
-    const getColIndex = (name) => headerRow.findIndex(h => h === name);
+    console.log('📋 Headers found:', headerRow);
+    
+    const getColIndex = (name) => {
+      const index = headerRow.findIndex(h => h === name);
+      if (index === -1) {
+        console.warn(`⚠️ Column "${name}" not found in headers`);
+      }
+      return index;
+    };
     
     // Column indices based on the screenshot
     const colIndices = {
@@ -39,13 +70,29 @@ export async function GET(request) {
       passkey: getColIndex('Passkey'),
       role: getColIndex('Role'),
       status: getColIndex('Status'),
-      // Access permissions
+      // Access permissions (table headers might be different)
       dispatch: getColIndex('Dispatch'),
       packing: getColIndex('Packing'),
       consignment: getColIndex('Consignment'),
       reports: getColIndex('Reports'),
       liveStock: getColIndex('LiveStock'),
     };
+
+    // Check if essential columns exist
+    const missingColumns = [];
+    if (colIndices.employeeId === -1) missingColumns.push('employee ID');
+    if (colIndices.name === -1) missingColumns.push('Name');
+    if (colIndices.passkey === -1) missingColumns.push('Passkey');
+    if (colIndices.status === -1) missingColumns.push('Status');
+    
+    if (missingColumns.length > 0) {
+      console.error('❌ Missing required columns:', missingColumns);
+      return Response.json({ 
+        success: false,
+        error: `Missing required columns in UserAccess sheet: ${missingColumns.join(', ')}`,
+        availableHeaders: headerRow
+      }, { status: 400, headers });
+    }
 
     // Parse user data
     const users = [];
@@ -56,22 +103,27 @@ export async function GET(request) {
       
       // Only include active users
       if (status === 'Active') {
-        users.push({
+        const user = {
           employeeId: row[colIndices.employeeId] || '',
           name: row[colIndices.name] || '',
           email: row[colIndices.email] || '',
           passkey: row[colIndices.passkey] || '',
           role: row[colIndices.role] || 'PC',
           status: status,
-          // Access permissions
+          // Access permissions (default to 'View' if column doesn't exist)
           permissions: {
-            dispatch: row[colIndices.dispatch] || 'View',
-            packing: row[colIndices.packing] || 'View',
-            consignment: row[colIndices.consignment] || 'View',
-            reports: row[colIndices.reports] || 'View',
-            liveStock: row[colIndices.liveStock] || 'View',
+            dispatch: colIndices.dispatch !== -1 ? (row[colIndices.dispatch] || 'View') : 'View',
+            packing: colIndices.packing !== -1 ? (row[colIndices.packing] || 'View') : 'View',
+            consignment: colIndices.consignment !== -1 ? (row[colIndices.consignment] || 'View') : 'View',
+            reports: colIndices.reports !== -1 ? (row[colIndices.reports] || 'View') : 'View',
+            liveStock: colIndices.liveStock !== -1 ? (row[colIndices.liveStock] || 'View') : 'View',
           }
-        });
+        };
+        
+        // Only add if employeeId and name exist
+        if (user.employeeId && user.name) {
+          users.push(user);
+        }
       }
     }
 
@@ -83,10 +135,17 @@ export async function GET(request) {
     }, { headers });
 
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('❌ Error fetching users:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     return Response.json({ 
       success: false,
-      error: error.message 
+      error: error.message || 'Failed to fetch users',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     }, { status: 500, headers });
   }
 }
