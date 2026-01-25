@@ -105,7 +105,7 @@ export async function GET(request) {
       if (!row[colIndices.sku]) continue;
 
       const sku = row[colIndices.sku];
-      const currentStock = parseFloat(row[20] || '0') : 0;
+      const currentStock = parseFloat(row[20] || '0');
       const avgDailyConsumption = parseFloat(row[colIndices.avgDailyConsumption] || '0');
       const leadTime = parseFloat(row[colIndices.leadTime] || '0');
       const reservedQty = parseFloat(row[colIndices.reservedQty] || '0');
