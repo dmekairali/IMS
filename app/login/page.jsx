@@ -1,40 +1,71 @@
-// app/login/page.jsx - FIXED: Proper login flow
+// app/login/page.jsx - Updated login with dropdown selection
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [employees, setEmployees] = useState([]);
+  const [selectedEmployee, setSelectedEmployee] = useState('');
+  const [passkey, setPasskey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   
   const { login } = useAuth();
   const router = useRouter();
 
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch('/api/users/list');
+      if (!response.ok) throw new Error('Failed to fetch employees');
+      
+      const { users } = await response.json();
+      setEmployees(users || []);
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+      setError('Failed to load employee list. Please refresh.');
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
+    if (!selectedEmployee) {
+      setError('Please select an employee');
+      return;
+    }
+    
+    if (!passkey) {
+      setError('Please enter your passkey');
+      return;
+    }
+    
     setLoading(true);
 
     try {
-      const result = login(username, password);
+      const result = await login(selectedEmployee, passkey);
       
       if (result.success) {
-        // ⭐ FIX: Wait a bit to ensure state is saved, then navigate
-        console.log('✅ Login successful, redirecting...');
+        console.log('✅ Login successful, redirecting to Stock...');
         
         // Small delay to ensure localStorage and cookies are set
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Navigate to home page
-        router.push('/');
+        // Navigate to Stock page (default)
+        router.push('/live-stock');
         
-        // ⭐ CRITICAL: Force a hard refresh to ensure clean state
+        // Force a hard refresh to ensure clean state
         setTimeout(() => {
-          window.location.href = '/';
+          window.location.href = '/live-stock';
         }, 200);
       } else {
         setError(result.error);
@@ -73,8 +104,8 @@ export default function LoginPage() {
             )}
 
             <div>
-              <label htmlFor="username" className="block text-sm font-semibold text-gray-700 mb-2">
-                Username
+              <label htmlFor="employee" className="block text-sm font-semibold text-gray-700 mb-2">
+                Select Employee
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -82,37 +113,49 @@ export default function LoginPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
-                  placeholder="Enter username"
+                <select
+                  id="employee"
+                  value={selectedEmployee}
+                  onChange={(e) => setSelectedEmployee(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all appearance-none bg-white"
                   required
-                  autoComplete="username"
-                  disabled={loading}
-                />
+                  disabled={loading || loadingEmployees}
+                >
+                  <option value="">-- Select Your Name --</option>
+                  {employees.map(emp => (
+                    <option key={emp.employeeId} value={emp.employeeId}>
+                      {emp.name} ({emp.role})
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               </div>
+              {loadingEmployees && (
+                <p className="text-xs text-gray-500 mt-1">Loading employees...</p>
+              )}
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                Password
+              <label htmlFor="passkey" className="block text-sm font-semibold text-gray-700 mb-2">
+                Passkey
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                   </svg>
                 </div>
                 <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  id="passkey"
+                  type={showPassword ? "text" : "password"}
+                  value={passkey}
+                  onChange={(e) => setPasskey(e.target.value)}
                   className="w-full pl-10 pr-12 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
-                  placeholder="Enter password"
+                  placeholder="Enter your passkey"
                   required
                   autoComplete="current-password"
                   disabled={loading}
@@ -121,7 +164,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  disabled={loading}
+                  tabIndex={-1}
                 >
                   {showPassword ? (
                     <svg className="w-5 h-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,26 +182,39 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading || !username || !password}
-              className="w-full bg-gradient-to-r from-teal-600 to-teal-700 text-white py-3.5 rounded-lg font-semibold hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl active:scale-98"
+              disabled={loading || loadingEmployees}
+              className="w-full bg-gradient-to-r from-teal-600 to-teal-700 text-white py-3 rounded-lg font-semibold hover:from-teal-700 hover:to-teal-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   Signing in...
-                </span>
+                </>
               ) : (
-                'Sign In'
+                <>
+                  Sign In
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </>
               )}
             </button>
           </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-500">
+              Contact your administrator if you need help accessing your account
+            </p>
+          </div>
         </div>
 
-        <div className="text-center mt-6">
-          <p className="text-sm text-gray-600">© 2025 Kairali Ayurvedic Products Pvt Ltd</p>
+        <div className="mt-6 text-center">
+          <p className="text-xs text-gray-500">
+            © {new Date().getFullYear()} Kairali Ayurvedic Products Pvt Ltd. All rights reserved.
+          </p>
         </div>
       </div>
     </div>
