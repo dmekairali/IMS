@@ -13,12 +13,12 @@ export async function GET(request) {
 
   try {
     const sheets = await getSheets();
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_IMS; // Your IMS spreadsheet
+    const spreadsheetId = '1A5_fHur2RgnCpOmRKDiUVlH2KanW5dcDS2L8pExyTtc'; // Your IMS spreadsheet
     
     // Fetch from UserAccess sheet
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'UserAccess!A1:Z', // Get all data with headers
+      range: 'UserAccess!A1:Z50', // Get all data with headers
     });
 
     const rows = response.data.values || [];
