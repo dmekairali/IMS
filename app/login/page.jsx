@@ -22,14 +22,31 @@ export default function LoginPage() {
 
   const fetchEmployees = async () => {
     try {
+      console.log('🔍 Fetching employees list...');
       const response = await fetch('/api/users/list');
-      if (!response.ok) throw new Error('Failed to fetch employees');
       
-      const { users } = await response.json();
-      setEmployees(users || []);
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch employees' }));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Employees data:', data);
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load employees');
+      }
+      
+      setEmployees(data.users || []);
+      
+      if (data.users?.length === 0) {
+        setError('No active employees found. Please check UserAccess sheet.');
+      }
     } catch (err) {
-      console.error('Error fetching employees:', err);
-      setError('Failed to load employee list. Please refresh.');
+      console.error('❌ Error fetching employees:', err);
+      setError(`Failed to load employee list: ${err.message}. Please check console for details.`);
     } finally {
       setLoadingEmployees(false);
     }
