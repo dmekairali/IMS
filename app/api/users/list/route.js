@@ -27,9 +27,6 @@ export async function GET(request) {
     console.log('📄 Using spreadsheet ID:', spreadsheetId);
     
     const sheets = await getSheets();
-    console.log('📄 Using spreadsheet ID:', spreadsheetId);
-    
-    const sheets = await getSheets();
     
     // Fetch from UserAccess sheet
     console.log('📡 Fetching UserAccess sheet data...');
