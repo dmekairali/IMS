@@ -4,6 +4,11 @@ import { NextResponse } from 'next/server';
 export function middleware(request) {
   const { pathname } = request.nextUrl;
   
+  // Allow API routes to pass through without authentication check
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+  
   const publicPaths = ['/login'];
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
   const token = request.cookies.get('auth-token')?.value;
@@ -13,7 +18,7 @@ export function middleware(request) {
   }
   
   if (isPublicPath && token && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/live-stock', request.url));
   }
   
   return NextResponse.next();
