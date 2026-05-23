@@ -1,6 +1,8 @@
 // app/api/orders/list/route.js - UPDATED VERSION (No OID Log, with Combo Expansion)
 // Include packing status and consignment image URL
+// Falls back to OrderProductDetails sheet when primary "All Form Data" has no items for an order
 import { getSheets } from '@/lib/googleSheets';
+import { parseOrderItems, PRIMARY_HEADER_MAP, FALLBACK_HEADER_MAP } from '@/lib/orderItems';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,19 +17,39 @@ export async function GET(request) {
   try {
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
+    const fallbackSpreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_FALLBACK;
 
-    // Get all orders from DispatchData (no OID Log check needed)
-    const dispatchDataResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'DispatchData!A1:AE',
-    });
+    // Fetch all sheets in parallel. Fallback failure must not break the route.
+    const [dispatchDataResponse, formDataResponse, comboResponse, fallbackResponse] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'DispatchData!A1:AE',
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'All Form Data!A1:Q',
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'Combo!A1:Z',
+      }),
+      fallbackSpreadsheetId
+        ? sheets.spreadsheets.values.get({
+            spreadsheetId: fallbackSpreadsheetId,
+            range: 'OrderProductDetails!A1:X',
+          }).catch(err => {
+            console.warn('Fallback OrderProductDetails fetch failed:', err.message);
+            return { data: { values: [] } };
+          })
+        : Promise.resolve({ data: { values: [] } }),
+    ]);
 
     const dispatchRows = dispatchDataResponse.data.values || [];
     if (dispatchRows.length === 0) {
       return Response.json({ orders: [] }, { headers });
     }
 
-    // Parse headers
+    // Parse DispatchData headers
     const headers_data = dispatchRows[0];
     const getColumnIndex = (name) => headers_data.findIndex(h => h === name);
 
@@ -46,87 +68,33 @@ export async function GET(request) {
     const invoiceLinkCol = getColumnIndex('Invoice Link');
     const consignmentImageCol = getColumnIndex('Consignment Images Url');
 
-    // Get all SKU details from All Form Data
-    const formDataResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'All Form Data!A1:Q',
-    });
-
     const formDataRows = formDataResponse.data.values || [];
-    if (formDataRows.length === 0) {
-      return Response.json({ orders: [] }, { headers });
-    }
-
-    const formHeaders = formDataRows[0];
-    const getFormColumnIndex = (name) => formHeaders.findIndex(h => h === name);
-
-    const formOrderIdCol = getFormColumnIndex('Order Id');
-    const productsCol = getFormColumnIndex('Products');
-    const mrpCol = getFormColumnIndex('MRP');
-    const packageCol = getFormColumnIndex('Package');
-    const qtyCol = getFormColumnIndex('Qty');
-    const totalCol = getFormColumnIndex('Total');
-    const skuCol = getFormColumnIndex('SKU(All)');
-
-    // Get combo mappings
-    const comboResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'Combo!A1:Z',
-    });
+    const fallbackRows = fallbackResponse.data.values || [];
 
     const comboMap = buildComboMap(comboResponse.data.values || []);
 
     // Build orders
     const orders = [];
+    let fallbackUsedCount = 0;
 
     for (let i = 1; i < dispatchRows.length; i++) {
       const row = dispatchRows[i];
       const orderId = row[orderIdCol];
-      const dispatched = row[dispatchedCol];
 
-      // Get SKU items for this order
-      const orderItems = [];
-      
-      formDataRows.slice(1).forEach(formRow => {
-        const formOrderId = formRow[formOrderIdCol];
-        const qty = parseInt(formRow[qtyCol] || '0');
-        const sku = formRow[skuCol] || '';
-        
-        if (formOrderId !== orderId || qty <= 0) return;
+      let orderItems = parseOrderItems(formDataRows, orderId, comboMap, PRIMARY_HEADER_MAP);
+      let itemSource = 'primary';
 
-        // Check if this is a combo product
-        if (sku.startsWith('KP-Combo')) {
-          // Expand combo into individual products
-          const comboProducts = comboMap[sku] || [];
-          comboProducts.forEach(comboProduct => {
-            orderItems.push({
-              productName: comboProduct.productName,
-              sku: comboProduct.sku,
-              mrp: comboProduct.mrp,
-              package: comboProduct.package,
-              quantityOrdered: comboProduct.quantity * qty, // Multiply by combo quantity
-              total: comboProduct.mrp * comboProduct.quantity * qty,
-              isFromCombo: true,
-              comboSKU: sku,
-              comboName: formRow[productsCol] || ''
-            });
-          });
-        } else {
-          // Regular product
-          orderItems.push({
-            productName: formRow[productsCol] || '',
-            sku: sku,
-            mrp: parseFloat(formRow[mrpCol] || '0'),
-            package: formRow[packageCol] || '',
-            quantityOrdered: qty,
-            total: parseFloat(formRow[totalCol] || '0'),
-            isFromCombo: false
-          });
+      if (orderItems.length === 0 && fallbackRows.length > 0) {
+        orderItems = parseOrderItems(fallbackRows, orderId, comboMap, FALLBACK_HEADER_MAP);
+        if (orderItems.length > 0) {
+          itemSource = 'fallback';
+          fallbackUsedCount++;
         }
-      });
+      }
 
       if (orderItems.length === 0) continue;
 
+      const dispatched = row[dispatchedCol];
       const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantityOrdered, 0);
       const packingListLink = row[packingListCol] || '';
       const stickerLink = row[stickerCol] || '';
@@ -154,11 +122,12 @@ export async function GET(request) {
         hasConsignmentImage: hasConsignmentImage,
         items: orderItems,
         totalQuantity: totalQuantity,
+        itemSource: itemSource,
         rowIndex: i + 1
       });
     }
 
-    console.log(`✅ Fetched ${orders.length} orders at ${new Date().toISOString()}`);
+    console.log(`✅ Fetched ${orders.length} orders (${fallbackUsedCount} from fallback) at ${new Date().toISOString()}`);
 
     return Response.json({ orders }, { headers });
   } catch (error) {
@@ -186,7 +155,7 @@ function buildComboMap(comboRows) {
     const row = comboRows[i];
     const comboSKU = row[comboSKUCol];
     const sku = row[skuCol];
-    
+
     if (!comboSKU || !sku) continue;
 
     if (!comboMap[comboSKU]) {

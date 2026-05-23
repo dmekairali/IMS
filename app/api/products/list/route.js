@@ -1,5 +1,7 @@
 // app/api/products/list/route.js - Match existing project structure with combo expansion
+// Falls back to OrderProductDetails sheet for orders missing from "All Form Data"
 import { getSheets } from '@/lib/googleSheets';
+import { parseProductRowsByOrder, PRIMARY_HEADER_MAP, FALLBACK_HEADER_MAP } from '@/lib/orderItems';
 
 // Force dynamic rendering - prevent Next.js caching
 export const dynamic = 'force-dynamic';
@@ -16,83 +18,55 @@ export async function GET(request) {
   try {
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
+    const fallbackSpreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_FALLBACK;
 
-    // Fetch data from "All Form Data" sheet
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'All Form Data!A1:Z', // Get headers + data
-    });
+    // Fetch primary, combo, and fallback sheets in parallel.
+    const [response, comboResponse, fallbackResponse] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'All Form Data!A1:Z',
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'Combo!A1:Z',
+      }),
+      fallbackSpreadsheetId
+        ? sheets.spreadsheets.values.get({
+            spreadsheetId: fallbackSpreadsheetId,
+            range: 'OrderProductDetails!A1:X',
+          }).catch(err => {
+            console.warn('Fallback OrderProductDetails fetch failed:', err.message);
+            return { data: { values: [] } };
+          })
+        : Promise.resolve({ data: { values: [] } }),
+    ]);
 
     const rows = response.data.values || [];
-    
-    if (rows.length === 0) {
-      return Response.json({ orders: [], products: [] }, { headers });
-    }
-
-    // Parse headers
-    const headers_data = rows[0];
-    const getColumnIndex = (name) => headers_data.findIndex(h => h === name);
-
-    const orderIdCol = getColumnIndex('Order Id');
-    const productsCol = getColumnIndex('Products');
-    const skuCol = getColumnIndex('SKU(All)');
-    const mrpCol = getColumnIndex('MRP');
-    const packageCol = getColumnIndex('Package');
-    const qtyCol = getColumnIndex('Qty');
-    const totalCol = getColumnIndex('Total');
-
-    // Get combo mappings
-    const comboResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'Combo!A1:Z',
-    });
-
+    const fallbackRows = fallbackResponse.data.values || [];
     const comboMap = buildComboMap(comboResponse.data.values || []);
 
-    // Map rows to product objects - EXCLUDE 0 quantity products, EXPAND combos
+    if (rows.length === 0 && fallbackRows.length === 0) {
+      return Response.json({ success: true, products: [], count: 0 }, { headers });
+    }
+
+    const primaryByOrder = parseProductRowsByOrder(rows, comboMap, PRIMARY_HEADER_MAP);
+    const fallbackByOrder = parseProductRowsByOrder(fallbackRows, comboMap, FALLBACK_HEADER_MAP);
+
     const products = [];
-    
-    rows.slice(1).forEach((row) => {
-      const qty = parseInt(row[qtyCol] || '0');
-      if (qty <= 0) return; // Skip zero quantity
 
-      const sku = row[skuCol] || '';
-      const orderId = row[orderIdCol] || '';
+    // Add all primary items
+    Object.values(primaryByOrder).forEach(items => products.push(...items));
 
-      // Check if this is a combo product
-      if (sku.startsWith('KP-Combo')) {
-        // Expand combo into individual products
-        const comboProducts = comboMap[sku] || [];
-        comboProducts.forEach(comboProduct => {
-          products.push({
-            oid: orderId,
-            sku: comboProduct.sku,
-            productName: comboProduct.productName,
-            package: comboProduct.package,
-            quantity: (comboProduct.quantity * qty).toString(),
-            mrp: comboProduct.mrp.toString(),
-            total: (comboProduct.mrp * comboProduct.quantity * qty).toString(),
-            isFromCombo: true,
-            comboSKU: sku,
-            comboName: row[productsCol] || ''
-          });
-        });
-      } else {
-        // Regular product
-        products.push({
-          oid: orderId,
-          sku: sku,
-          productName: row[productsCol] || '',
-          package: row[packageCol] || '',
-          quantity: row[qtyCol] || '0',
-          mrp: row[mrpCol] || '0',
-          total: row[totalCol] || '0',
-          isFromCombo: false
-        });
+    // Add fallback items only for orders not present in primary
+    let fallbackOrdersUsed = 0;
+    Object.entries(fallbackByOrder).forEach(([orderId, items]) => {
+      if (!primaryByOrder[orderId]) {
+        products.push(...items);
+        fallbackOrdersUsed++;
       }
     });
 
-    console.log(`✅ Fetched ${products.length} products (combos expanded) at ${new Date().toISOString()}`);
+    console.log(`✅ Fetched ${products.length} products (combos expanded, ${fallbackOrdersUsed} orders from fallback) at ${new Date().toISOString()}`);
 
     return Response.json({
       success: true,
@@ -136,7 +110,7 @@ function buildComboMap(comboRows) {
     const row = comboRows[i];
     const comboSKU = row[comboSKUCol];
     const sku = row[skuCol];
-    
+
     if (!comboSKU || !sku) continue;
 
     if (!comboMap[comboSKU]) {
