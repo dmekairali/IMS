@@ -17,7 +17,12 @@ export async function GET(request) {
   try {
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_ORDERSHEET;
-    const fallbackSpreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_FALLBACK;
+    // OrderProductDetails lives in a separate spreadsheet. Some orders (e.g. ASK_AYURVEDA-*)
+    // have line items only in that sheet. Default to the known sheet ID so they still list
+    // even when GOOGLE_SHEETS_SPREADSHEET_ID_FALLBACK is unset/blank in the environment.
+    const fallbackSpreadsheetId =
+      process.env.GOOGLE_SHEETS_SPREADSHEET_ID_FALLBACK ||
+      '1QUcmBQbo3sP92Ypo0avERaJQ6Qrt27g_se34IhAT77o';
 
     // Fetch all sheets in parallel. Fallback failure must not break the route.
     const [dispatchDataResponse, formDataResponse, comboResponse, fallbackResponse] = await Promise.all([

@@ -1,0 +1,9 @@
+.vercel
+.env*.local
+
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
