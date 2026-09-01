@@ -2,6 +2,7 @@ import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { DataProvider } from '@/contexts/DataContext';
 import LayoutWrapper from '@/components/layout/LayoutWrapper';
+import DevServiceWorkerCleanup from '@/components/common/DevServiceWorkerCleanup';
 
 export const metadata = {
   title: 'Inventory Management - Kairali',
@@ -20,6 +21,7 @@ export default function RootLayout({ children }) {
         <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2913/2913133.png" />
       </head>
       <body className="bg-gray-50">
+        <DevServiceWorkerCleanup />
         <AuthProvider>
           <DataProvider>
             <LayoutWrapper>

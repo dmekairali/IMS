@@ -17,10 +17,6 @@ export function middleware(request) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
   
-  if (isPublicPath && token && pathname === '/login') {
-    return NextResponse.redirect(new URL('/live-stock', request.url));
-  }
-  
   return NextResponse.next();
 }
 

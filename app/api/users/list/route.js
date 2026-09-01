@@ -50,29 +50,73 @@ export async function GET(request) {
     // First row is headers
     const headerRow = rows[0];
     console.log('📋 Headers found:', headerRow);
-    
+
+    const normalizeText = (value) => (typeof value === 'string' ? value.trim() : '');
+    const normalizeHeader = (value) => normalizeText(value).toLowerCase().replace(/\s+/g, ' ');
+
     const getColIndex = (name) => {
-      const index = headerRow.findIndex(h => h === name);
+      const target = normalizeHeader(name);
+      const index = headerRow.findIndex((h) => normalizeHeader(h) === target);
       if (index === -1) {
         console.warn(`⚠️ Column "${name}" not found in headers`);
       }
       return index;
     };
-    
+
+    const getColIndexFromAliases = (aliasList) => {
+      const candidates = (aliasList || []).map(normalizeHeader);
+      const index = headerRow.findIndex((h) => {
+        const normalized = normalizeHeader(h);
+        return candidates.some(candidate => normalized === candidate);
+      });
+      if (index === -1) {
+        console.warn(`⚠️ Column not found from aliases: ${aliasList?.join(', ')}`);
+      }
+      return index;
+    };
+
+    const getColIndexByPattern = (matcher) => {
+      const index = headerRow.findIndex((h) => {
+        const normalized = normalizeHeader(h);
+        return matcher(normalized);
+      });
+      if (index === -1) {
+        console.warn('⚠️ Column not found by pattern');
+      }
+      return index;
+    };
+
+    const qcUploadUrlColFallback =
+      getColIndexFromAliases([
+        'QC Details Upload URL',
+        'QC Details Upload Link',
+        'QC Upload URL',
+        'QC Upload Link',
+        'QC Link',
+        'QC Details URL',
+        'QC Details Link',
+      ]);
+
+    const qcColFallback = getColIndexFromAliases(['QC', 'QC Access', 'QC Permission']);
+
     // Column indices based on the screenshot
     const colIndices = {
-      employeeId: getColIndex('employee ID'),
-      name: getColIndex('Name'),
-      email: getColIndex('Email'),
-      passkey: getColIndex('Passkey'),
-      role: getColIndex('Role'),
-      status: getColIndex('Status'),
+      employeeId: getColIndexFromAliases(['Employee ID', 'EmployeeID', 'Emp ID', 'EmpId', 'ID']),
+      name: getColIndexFromAliases(['Name', 'User Name', 'Full Name', 'Employee Name']),
+      email: getColIndexFromAliases(['Email', 'Email ID', 'Mail']),
+      passkey: getColIndexFromAliases(['Passkey', 'Password', 'PIN', 'Pass Code']),
+      role: getColIndexFromAliases(['Role', 'Designation']),
+      status: getColIndexFromAliases(['Status', 'Active Status', 'User Status']),
       // Access permissions (table headers might be different)
       dispatch: getColIndex('Dispatch'),
       packing: getColIndex('Packing'),
       consignment: getColIndex('Consignment'),
       reports: getColIndex('Reports'),
       liveStock: getColIndex('LiveStock'),
+      qc: qcColFallback,
+      qcUploadUrl: qcUploadUrlColFallback !== -1
+        ? qcUploadUrlColFallback
+        : getColIndexByPattern((normalized) => normalized.includes('qc') && normalized.includes('upload') && normalized.includes('url')),
     };
 
     // Check if essential columns exist
@@ -80,7 +124,6 @@ export async function GET(request) {
     if (colIndices.employeeId === -1) missingColumns.push('employee ID');
     if (colIndices.name === -1) missingColumns.push('Name');
     if (colIndices.passkey === -1) missingColumns.push('Passkey');
-    if (colIndices.status === -1) missingColumns.push('Status');
     
     if (missingColumns.length > 0) {
       console.error('❌ Missing required columns:', missingColumns);
@@ -96,10 +139,18 @@ export async function GET(request) {
     
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const status = row[colIndices.status];
+      const statusRaw = colIndices.status !== -1 ? normalizeText(row[colIndices.status] || '') : '';
+      const status = statusRaw.toLowerCase() === 'active' ? 'Active' : statusRaw;
+      const qcUploadUrl = colIndices.qcUploadUrl !== -1 ? normalizeText(row[colIndices.qcUploadUrl] || '') : '';
+      const qcPermissionRaw = colIndices.qc !== -1 ? normalizeText(row[colIndices.qc] || '') : '';
+      const qcPermission = qcPermissionRaw
+        ? qcPermissionRaw
+        : (qcUploadUrl ? 'View' : 'No Access');
       
       // Only include active users
-      if (status === 'Active') {
+      const isActive = statusRaw ? status === 'Active' : true;
+
+      if (isActive) {
         const user = {
           employeeId: row[colIndices.employeeId] || '',
           name: row[colIndices.name] || '',
@@ -114,7 +165,9 @@ export async function GET(request) {
             consignment: colIndices.consignment !== -1 ? (row[colIndices.consignment] || 'View') : 'View',
             reports: colIndices.reports !== -1 ? (row[colIndices.reports] || 'View') : 'View',
             liveStock: colIndices.liveStock !== -1 ? (row[colIndices.liveStock] || 'View') : 'View',
-          }
+            qc: qcPermission || 'No Access',
+          },
+          qcUploadUrl,
         };
         
         // Only add if employeeId and name exist

@@ -1,6 +1,6 @@
 // app/live-stock/page.jsx - Standalone Live Stock Tracker Page
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorMessage from '@/components/common/ErrorMessage';
 import LiveStockTracker from '@/components/reports/LiveStockTracker';
@@ -9,19 +9,26 @@ export default function LiveStockPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const requestRef = useRef(null);
 
   useEffect(() => {
     loadData();
+
+    return () => requestRef.current?.abort();
   }, []);
 
   async function loadData() {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
 
     try {
       // Load finished goods inventory data
       const response = await fetch('/api/inventory/finished-goods', {
-        cache: 'no-store'
+        cache: 'no-store',
+        signal: AbortSignal.timeout(20000)
       });
       
       if (!response.ok) {
@@ -34,10 +41,13 @@ export default function LiveStockPage() {
       console.log('✅ Live Stock data loaded:', data.products?.length || 0);
 
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('❌ Error loading data:', err);
-      setError(err.message);
+      setError(err.name === 'TimeoutError'
+        ? 'Inventory service timed out. Please try again.'
+        : err.message || 'Failed to load inventory data');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }
 

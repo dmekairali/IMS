@@ -4,6 +4,11 @@ import { getSheets } from '@/lib/googleSheets';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Avoid repeatedly hitting Google Sheets when users navigate back to this page.
+// The data remains effectively live while preventing quota spikes.
+const CACHE_TTL_MS = 30 * 1000;
+let finishedGoodsCache = null;
+
 export async function GET(request) {
   const headers = {
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
@@ -12,6 +17,10 @@ export async function GET(request) {
   };
 
   try {
+    if (finishedGoodsCache && Date.now() - finishedGoodsCache.timestamp < CACHE_TTL_MS) {
+      return Response.json(finishedGoodsCache.payload, { headers });
+    }
+
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID_FG;
 
@@ -240,18 +249,21 @@ export async function GET(request) {
     console.log(`✅ Fetched ${products.length} products from Finished Goods at ${new Date().toISOString()}`);
     console.log(`📊 Today's stock column: ${metadata.todayDate}`);
 
-    return Response.json({ 
+    const payload = {
       success: true,
       products,
       metadata
-    }, { headers });
+    };
+    finishedGoodsCache = { timestamp: Date.now(), payload };
+
+    return Response.json(payload, { headers });
 
   } catch (error) {
     console.error('Error fetching finished goods:', error);
     return Response.json({ 
       success: false,
       error: error.message 
-    }, { status: 500, headers });
+    }, { status: error.code === 'ETIMEDOUT' ? 504 : 500, headers });
   }
 }
 

@@ -5,6 +5,58 @@ import { useRouter } from 'next/navigation';
 
 const AuthContext = createContext();
 
+const DEFAULT_PERMISSIONS = {
+  dispatch: 'View',
+  packing: 'View',
+  consignment: 'View',
+  reports: 'View',
+  liveStock: 'View',
+  qc: 'No Access',
+};
+
+const normalizeText = (value) => (typeof value === 'string' ? value.trim() : `${value || ''}`.trim());
+
+const normalizePermissionValue = (value) => {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'admin') return 'Admin';
+  if (normalized === 'edit') return 'Edit';
+  if (normalized === 'view') return 'View';
+  return normalized === 'no access' ? 'No Access' : '';
+};
+
+const getPermissionFromObject = (permissions, key) => {
+  if (!permissions || typeof permissions !== 'object') return '';
+  const direct = normalizePermissionValue(permissions[key]);
+  if (direct) return direct;
+  const fallback = Object.keys(permissions || {}).find((k) => k.toLowerCase() === key.toLowerCase());
+  return fallback ? normalizePermissionValue(permissions[fallback]) : '';
+};
+
+const normalizePermissions = (permissions, qcUploadUrl = '') => {
+  const normalized = { ...DEFAULT_PERMISSIONS };
+
+  Object.keys(DEFAULT_PERMISSIONS).forEach((key) => {
+    const value = getPermissionFromObject(permissions, key);
+    if (value) normalized[key] = value;
+  });
+
+  if ((!getPermissionFromObject(permissions, 'qc')) && normalizeText(qcUploadUrl)) {
+    normalized.qc = 'View';
+  }
+
+  return normalized;
+};
+
+const normalizeUser = (rawUser) => {
+  if (!rawUser || typeof rawUser !== 'object') return null;
+  const qcUploadUrl = normalizeText(rawUser.qcUploadUrl);
+  return {
+    ...rawUser,
+    qcUploadUrl,
+    permissions: normalizePermissions(rawUser.permissions, qcUploadUrl),
+  };
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,9 +66,13 @@ export function AuthProvider({ children }) {
     // Check if user is logged in on mount
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = normalizeUser(JSON.parse(storedUser));
+      if (parsedUser) {
+        setUser(parsedUser);
+        localStorage.setItem('user', JSON.stringify(parsedUser));
+      }
       // Also set cookie for middleware
-      document.cookie = `auth-token=${JSON.parse(storedUser).employeeId}; path=/; max-age=86400`; // 24 hours
+      document.cookie = `auth-token=${parsedUser?.employeeId || ''}; path=/; max-age=86400`; // 24 hours
     }
     setLoading(false);
   }, []);
@@ -36,14 +92,15 @@ export function AuthProvider({ children }) {
       const userRecord = users.find(u => u.employeeId === employeeId);
       
       if (userRecord && userRecord.passkey === passkey) {
-        const userData = {
+        const userData = normalizeUser({
           employeeId: userRecord.employeeId,
           name: userRecord.name,
           email: userRecord.email,
           role: userRecord.role,
           permissions: userRecord.permissions,
-          loginTime: new Date().toISOString()
-        };
+          qcUploadUrl: userRecord.qcUploadUrl || '',
+          loginTime: new Date().toISOString(),
+        });
         
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
@@ -70,10 +127,13 @@ export function AuthProvider({ children }) {
   const hasPermission = (section, requiredLevel = 'View') => {
     if (!user || !user.permissions) return false;
     
-    const userPermission = user.permissions[section];
+    const userPermission = normalizePermissionValue(user.permissions[section]);
     
     // Admin has all permissions
     if (userPermission === 'Admin') return true;
+    if (section === 'qc' && !userPermission && normalizeText(user.qcUploadUrl)) {
+      return requiredLevel === 'View';
+    }
     
     // Check if user has required level
     if (requiredLevel === 'View') {
